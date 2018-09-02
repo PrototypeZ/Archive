@@ -1,6 +1,7 @@
 ---
 title: 不需要再手写 onSaveInstanceState 了，因为你的时间非常值钱
 tags: Android onSaveInstanceState
+date: 2018-06-06 00:00:00
 desc: 自动化组件状态保存与恢复
 ---
 
