@@ -613,7 +613,7 @@ netWorkApi.getColumns()
 ```
 
 > 这里引入了一个新的操作符 `collectInto`，用于把一个 Observable 里面发射的元素，收集到一个可变的容器内部，本例中用它来替换 `for` 循环相关逻辑，具体内容这里不再详细展开。
-[参考资料：CollectInto]()
+[参考资料：CollectInto](http://reactivex.io/documentation/operators/reduce.html)
 
 这个例子花了这么大篇幅来讲，超出了我一开始的预期，这也可以看出来的确 RxJava **学习的曲线是陡峭的**，不过我认为这个例子很好的表达我这一小节要阐述的观点，即 **Observable 在空间维度上对事件的重新组织，让我们的事件驱动型编程更具想象力** ，因为原先的编程中，我们面对多少个异步任务，就会写多少个回调，如果任务之间有依赖关系，我们的做法就是修改观察者（回调函数）逻辑以及新增数据结构保证依赖关系，RxJava 给我们带来的新思路是，Observable 在到达观察者之前，可以先通过操作符进行一系列变换（当然变换的规则还是和具体业务逻辑有关的），对观察者屏蔽数据产生的复杂性，只提供给观察者简单的数据接口。
 
@@ -859,8 +859,70 @@ btn.setOnClickListener(null);
 
 这一块不属于 RxJava 的核心 Feature，但是如果掌握好这块，可以让我们使用 RxJava 编程效率大大提升。
 
-// bindToLifeCycle
+我们举一个实际的例子，Activity 内发起的网络请求都需要绑定生命周期，即我们需要在 Activity 销毁的时候取消订阅所有未完成的网络请求。假设我目前已经可以获得一个 `Observable<ActivityEvent>`, 这是一个能接收到 Activity 生命周期的 `Observable`（获取方法可以借鉴三方框架 [RxLifecycle](https://github.com/trello/RxLifecycle.git)，或者自己内建一个不可见 Fragment，用来接收生命周期的回调）。
 
+那么用来保证每一个网络请求都能绑定 Activity 生命周期的代码应如下所示：
+
+```java
+public interface NetworkApi {
+    @GET("/path/to/api")
+    Call<List<Photo>> getAllPhotos();
+}
+
+public class MainActivity extends Activity {
+
+    Observable<ActivityEvent> lifecycle = ...
+    NetworkApi networkApi = ...
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        // 发起请求同时绑定生命周期
+        networkApi.getAllPhotos()
+            .compose(bindToLifecycle())
+            .subscribe(result -> {
+                // handle results
+            });
+    }
+
+    private <T> ObservableTransformer<T, T> bindToLifecycle() {
+        return upstream -> upstream.takeUntil(
+            lifecycle.filter(ActivityEvent.DESTROY::equals)
+        );
+    }
+}
+```
+
+> 如果您之前没有接触过 `ObservableTransformer`, 这里做一个简单介绍，它通常和 `compose` 操作符一起使用，用来把一个 `Observable` 进行加工、修饰，甚至替换为另一个 `Observable`。
+
+在这里我们封装了一个 `bindToLifecycle` 方法，它的返回类型是 `ObservableTransformer`，在 `ObservableTransformer` 内部，我们修饰了原 `Observable`, 使其可以在接收到 Activity 的 DESTROY 事件的时候自动取消订阅，这个逻辑是由 `takeUntil` 这个操作符完成的。其实我们可以把这个 `bindToLifecycle` 方法抽取出来，放到公共的工具类，这样所有的 Activity 内部发起的网络请求，都只需要加一行 `.compose(bindToLifecycle())` 就可以保证绑定生命周期了，从此再也不必担心由于网络请求引起的内存泄漏了。
+
+事实上我们还可以有更多玩法， 上面 `ObservableTransformer` 内部的 `upstream` 对象，就是一个 `Observable`，也就是说可以调用它的 `doOnSubscribe` 和 `doOnTerminate` 方法，我们可以在这两个方法里实现 Loading 动画的显隐：
+
+```java
+private <T> ObservableTransformer<T, T> applyLoading() {
+    return upstream -> upstream
+        .doOnSubscribe(() -> {
+            loading.show();
+        })
+        .doOnTerminae(() -> {
+            loading.dismiss();
+        });    
+    );
+}
+```
+
+这样，我们的网络请求只要调用两个 `compose` 操作符，就可以完成生命周期的绑定以及与之对应的 Loading 动画的显隐了：
+
+```java
+networkApi.getAllPhotos()
+    .compose(bindToLifecycle())
+    .compose(applyLoading())
+    .subscribe(result -> {
+        // handle results
+    });
+```
+
+操作符 `compose` 是 RxJava 给我们提供的可以面向 `Observable` 进行 AOP 的接口，善加利用就可以帮我们节省大量的时间和精力。
 
 ## RxJava 真的让你的代码更简洁？
 
