@@ -1,7 +1,7 @@
 ---
-title: RxJava 沉思录：用了这么久，你认为 RxJava 真的好用吗？
+title: RxJava 沉思录
 tags: RxJava
-date: 2018-09-01 15:31:00
+date: 2018-09-04 15:31:00
 desc: 重新认真思考 RxJava
 ---
 
