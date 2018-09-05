@@ -16,9 +16,9 @@ desc: 重新认真思考 RxJava
 
 <!-- More -->
 
-## Observable 在空间维度上重新组织事件的能力
+## 从一个简单的例子说起
 
-*情景一：有一个相册应用，从网络获取当前用户的照片列表，展示在 RecyclerView 里：*
+情景：有一个相册应用，从网络获取当前用户的照片列表，展示在 RecyclerView 里：
 
 ```java
 public interface NetworkApi {
@@ -27,7 +27,7 @@ public interface NetworkApi {
 }
 ```
 
-上面是使用 Retrofit 定义的从网络获取照片的 API 的接口。大家都知道，如果我们使用 Retrofit 的 **RxJavaCallAdapter** 就可以把接口中的返回从 `Call<List<Photo>>` 转为 `Observable<List<Photo>>`:
+上面是使用 Retrofit 定义的从网络获取照片的 API 的接口。大家都知道，如果我们使用 Retrofit 的 **RxJavaCallAdapter** 就可以把接口中的返回类型从 `Call<List<Photo>>` 转为 `Observable<List<Photo>>`:
 
 ```java
 public interface NetworkApi {
@@ -94,7 +94,7 @@ Observable<List<Photo>> cachedObservable = Observable.create(emitter -> {
 });
 ```
 
-到目前为止，发起网络请求和读取缓存这两个异步操作都被我们封装成了 `Observable` 的形式，前面做了这么多铺垫，接下来进入正题，把原先的面向 Callback 的异步操作统一改写为 `Observable` 的形式以后，首先带来的好处就是可以对 **Observable 在空间维度上进行重新组织**。
+到目前为止，发起网络请求和读取缓存这两个异步操作都被我们封装成了 `Observable` 的形式，前面做了这么多铺垫，接下来进入正题：把原先的面向 Callback 的异步操作统一改写为 `Observable` 的形式以后，首先带来的好处就是可以对 **Observable 在空间维度上进行重新组织**。
 
 ```java
 networkApi.getAllPhotos()
@@ -149,9 +149,9 @@ networkApi.getAllPhotos()
 
 我们比较一下使用 Callback 的写法和使用 `Observable` 进行组装的写法，可以发现，使用 Callback 的写法，经常会由于需求的变化，导致 Callback 内部的逻辑发生变动，而使用 `Observable` 的写法，观察者的核心逻辑则较为稳定，很少发生变化（本例中为刷新列表）。**Observable 通过内置的操作符对自身发射的元素在空间维度上重新组织，或者与其他的 `Observable` 一起在空间维度上进行重新组织，使得观察者的逻辑简单而直接，不需要关心数据从何而来，从而使观察者的逻辑较为稳定**。
 
-下面是一个比较复杂的例子（如果你赶时间也可以直接跳过这个例子）。
+## 一个复杂的例子
 
-*情景二：实现一个具有多种类型的 RecyclerView，如图所示：*
+情景：实现一个具有多种类型的 RecyclerView，如图所示：
 
 ![](/images/complex-list.png)
 
@@ -243,6 +243,8 @@ private void onOk(String type, List<? extends Item> response) {
 3. `onOk` 方法作为观察者, 会被回调 **n** 次，按照第一个接口里返回的顺序正确的汇总 **2** 中每个数据接口返回的结果，并且通知界面更新。 
 
 有点像写作文一样，这是一种 **总——分——总** 的结构。
+
+## Observable 在空间维度重新组织事件
 
 接下来我们使用 RxJava 来实现这个需求，我们会用到 RxJava 的一些操作符，来对 `Observable` 进行重新组织：
 
@@ -350,7 +352,7 @@ networkApi.getColumns()
 在上面代码里出现的所有操作符中，最核心的一个操作符就是 `combineLatest` 操作符，仔细比较 RxJava 版本和 Callback 版本就可以发现，`combineLatest` 操作符的功能其实和 Callback 版本里的 `onOk` 方法前半部分, `resultTypes`, `responseList` 合在一起功能是相当的，一方面负责收集多个接口返回的数据，另一方面保证收集回来的数据的顺序是和上一个接口返回的应该展示的数据的顺序是一致的。 
 
 
-
+## 一种更加函数式的写法
 
 从代码量上来看，RxJava 版本与 Callback 版本相差无几，对函数式编程比较擅长的人来说，RxJava 版本里 `for` 循环的写法，不够 “**函数式**”，我们可以把原来的写法改成一种更紧凑、更函数式的写法：
 
@@ -386,9 +388,11 @@ netWorkApi.getColumns()
 > 这里引入了一个新的操作符 `collectInto`，用于把一个 `Observable` 里面发射的元素，收集到一个可变的容器内部，本例中用它来替换 `for` 循环相关逻辑，具体内容这里不再详细展开。
 [参考资料：CollectInto](http://reactivex.io/documentation/operators/reduce.html)
 
-这个例子花了这么大篇幅来讲，超出了我一开始的预期，这也可以看出来的确 RxJava **学习的曲线是陡峭的**，不过我认为这个例子很好的表达我这一小节要阐述的观点，即 **Observable 在空间维度上对事件的重新组织，让我们的事件驱动型编程更具想象力** ，因为原先的编程中，我们面对多少个异步任务，就会写多少个回调，如果任务之间有依赖关系，我们的做法就是修改观察者（回调函数）逻辑以及新增数据结构保证依赖关系，RxJava 给我们带来的新思路是，Observable 在到达观察者之前，可以先通过操作符进行一系列变换（当然变换的规则还是和具体业务逻辑有关的），对观察者屏蔽数据产生的复杂性，只提供给观察者简单的数据接口。
+## 小结
 
-那么是否在这个例子中，RxJava 的版本更好呢，我个人的观点是虽然 RxJava 版本展现了其更有想象力的编程方式，但是就这个具体的例子，**两者并没有太大的差距**。RxJava 可以写出更短更内聚的代码，但是编写和理解的难度较大；Callback 版本虽然朴实无华，但是便于编写以及理解，可维护性更好。对于两者的好坏，我们也不要过于着急下结论，不妨继续看看 RxJava 还有什么其他的优势。
+第二个例子花了这么大篇幅来讲，超出了我一开始的预期，这也可以看出来的确 RxJava **学习的曲线是陡峭的**，不过我认为这个例子很好的表达我这一小节要阐述的观点，即 **Observable 在空间维度上对事件的重新组织，让我们的事件驱动型编程更具想象力** ，因为原先的编程中，我们面对多少个异步任务，就会写多少个回调，如果任务之间有依赖关系，我们的做法就是修改观察者（回调函数）逻辑以及新增数据结构保证依赖关系，RxJava 给我们带来的新思路是，`Observable` 的事件在到达观察者之前，可以先通过操作符进行一系列变换（当然变换的规则还是和具体业务逻辑有关的），对观察者屏蔽数据产生的复杂性，只提供给观察者简单的数据接口。
+
+那么是否在这个例子中，是否 RxJava 的版本更好呢，我个人的观点是虽然 RxJava 版本展现了其更有想象力的编程方式，但是就这个具体的例子，**两者并没有太大的差距**。RxJava 可以写出更短更内聚的代码，但是编写和理解的难度较大；Callback 版本虽然朴实无华，但是便于编写以及理解，可维护性更好。对于两者的好坏，我们也不要过于着急下结论，不妨继续看看 RxJava 还有什么其他的优势。
 
 （未完待续）
 
