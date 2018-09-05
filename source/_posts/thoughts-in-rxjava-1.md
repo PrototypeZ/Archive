@@ -251,8 +251,6 @@ public class Callback<T> {
 + [RxJava 沉思录（四）：总结](/2018/09/01/thoughts-in-rxjava-4/)
 
 ___
-***
----
 如果您对我的技术分享感兴趣，欢迎关注我的个人公众号：麻瓜日记，不定期更新原创技术分享，谢谢！:)
 
-![](/images/qrcode.jpg)
+![](http://prototypez.github.io/images/qrcode.jpg)

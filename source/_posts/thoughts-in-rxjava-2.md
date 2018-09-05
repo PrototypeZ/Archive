@@ -153,7 +153,7 @@ networkApi.getAllPhotos()
 
 情景：实现一个具有多种类型的 RecyclerView，如图所示：
 
-![](/images/complex-list.png)
+![](http://prototypez.github.io/images/complex-list.png)
 
 假设列表中有 3 种类型的数据，这 3 种类型共同填充了一个 RecyclerView，简单起见，我们定义 Retrofit 接口如下：
 
@@ -292,11 +292,11 @@ networkApi.getColumns()
 
 我们一步一步分析 RxJava 处理的具体步骤。首先是第一步，获取需要展示的栏目列表，这是最简单的，`networkApi.getColumns()` 这个方法返回是一个只发射一个元素的 `Observable`，这个元素即为展示的栏目列表，为了方便后续讨论，假设栏目的顺序为 `["a", "b", "c"]`, 如下图所示：
 
-![](/images/rxjava-demo-1.png)
+![](http://prototypez.github.io/images/rxjava-demo-1.png)
 
 接下来的操作符是 `map` 操作符，原来的 `Observable` 进行了变换，变成了一个新的 `Observable`，新的 `Observable` 还是只发射一个元素，这个元素的类型还是 List ，只不过 List 内部的数据类型从原先的字符串（代表数据类型）变成了 `Observable`。`Observable` 发射的元素还可以是 “`Observable` 的 List ” 吗？是的，没有什么不可以 : ) 
 
-![](/images/rxjava-demo-2.png)
+![](http://prototypez.github.io/images/rxjava-demo-2.png)
 
 > `map` 操作符负责把一个 `Observable` 里发射的元素全部进行转换，生成一个发射新的元素的 `Observable`，元素的种类会发生改变，但是发射的元素的数量不会发生改变。 [参考资料：Map](http://reactivex.io/documentation/operators/map.html)
 
@@ -304,7 +304,7 @@ networkApi.getColumns()
 
 接下来这一步可能是最难理解的一步了，`map` 操作之后，紧接着是 `flatMap` 操作符，而 `flatMap` 操作符传入的 lambda 表达式内部，又调用了 `Observable.combineLatest` 操作符，我们先从里面的 `combineLatest` 操作符开始讲起，请看下图：
 
-![](/images/rxjava-demo-3.png)
+![](http://prototypez.github.io/images/rxjava-demo-3.png)
 
 `combineLatest` 操作符的第一个参数 `requestObservables`，它的类型是 `Observable` 的 List，它就是上一步中 `map` 操作符进行变换之后，新的 `Observable` 发射的数据，即由
 
@@ -343,7 +343,7 @@ networkApi.getColumns()
 
 到这里为止，RxJava 实现的版本的每一步我们都解释完了，我们回过头重新梳理一下 RxJava 对 `Observable` 进行变换的过程，如下图：
 
-![](/images/rxjava-demo-4.png)
+![](http://prototypez.github.io/images/rxjava-demo-4.png)
 
 通过 RxJava 的操作符，我们把 `networkApi` 里的 4 个接口返回的 4 个 `Observable`，**在空间维度进行了重新组织**，最终把它们转成了一个 `Observable`，这个 `Observable` 发射的元素类型是 `List<Item>`，而这正是我们的观察者 -- Adapter 所关心的数据类型，观察者只需要监听这个 `Observable` ，并更新数据即可。
 
@@ -404,8 +404,6 @@ netWorkApi.getColumns()
 + [RxJava 沉思录（四）：总结](/2018/09/01/thoughts-in-rxjava-4/)
 
 ___
-***
----
 如果您对我的技术分享感兴趣，欢迎关注我的个人公众号：麻瓜日记，不定期更新原创技术分享，谢谢！:)
 
-![](/images/qrcode.jpg)
+![](http://prototypez.github.io/images/qrcode.jpg)

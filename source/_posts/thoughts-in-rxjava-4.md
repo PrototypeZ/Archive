@@ -45,12 +45,12 @@ btn.setOnClickListener(v -> {
 ## 生产者消费者模式中 RxJava 扮演的角色
 
 无论是同步还是异步，我们日常的事件驱动型编程可以被看成是一种 “**生产者——消费者**” 模型：
-![Callback](/images/rxjava-graph-1.png)
+![Callback](http://prototypez.github.io/images/rxjava-graph-1.png)
 
 在异步的情况下，我们的代码可以被分为两大块，一块生产事件，一块消费事件，两者通过 Callback 联系起来。而 Callback 是轻量级的，大多数和 Callback 相关的逻辑就仅仅是设置回调和取消设置的回调而已。
 
 如果我们的项目中引入了 RxJava ，我们可以发现，“**生产者——消费者**” 这个模型中，中间多了一层 RxJava 相关的逻辑层：
-![RxJava](/images/rxjava-graph-2.png)
+![RxJava](http://prototypez.github.io/images/rxjava-graph-2.png)
 
 而这一层的作用，我们在之前的讨论中已经明确，是用来对生产者产生的事件进行重新组织的。这个架构之下，生产者这一层的变化不会很大，直接受影响的是消费者这一层，由于 RxJava 这一层对事件进行了“预处理”，消费者这一层代码会比之前轻很多。同时由于 RxJava 取代了原先的 Callback 这一层，RxJava 这一层的代码是会比原先 Callback 这一层更厚。
 
@@ -145,7 +145,7 @@ networkApi.getAllPhotos()
 
 首先我想要明确一点，RxJava 是一个 “**夹带了私货**” 的框架，它本身最重要的贡献是提升了我们思考事件驱动型编程的维度，但是它与此同时又逼迫我们去接受了函数式编程。函数式编程在处理集合、列表这些数据结构时相比较指令式编程具有先天的优势，我理解框架的设计者，由于框架本身提升了我们对事件思考的维度，那么无论是时间维度还是空间维度，一连串发射出来的事件其实就可以被看成许许多多事件的集合，既然是集合，那肯定是使用函数式的风格去处理更加优雅。
 
-![](/images/rxjava-graph-3.png)
+![](http://prototypez.github.io/images/rxjava-graph-3.png)
 
 原先的时候，我们接触的函数式编程只是用于处理静态的数据，当我们接触了 RxJava 之后，发现动态的异步事件组成的集合居然也可以使用函数式编程的方式去处理，我不由地佩服框架设计者的脑洞大开。事实上，RxJava 很多操作符都是直接照搬函数式编程中处理集合的函数，例如：`map`, `filter`, `flatMap`, `reduce` 等等。
 
@@ -159,7 +159,7 @@ networkApi.getAllPhotos()
 
 在本文前半部分，我们说到过，有的人认为 RxJava 是简洁的，而有的人的看法则完全相反，这件事的本质在于大家对 **简洁** 的期望不同，大多数人认为的简洁指得是代码简单好理解，而高度抽象的代码是不满足这一点的，所以很多人最后发现理解抽象的 RxJava 代码需要花更多的时间，反而不 “简洁” 。认为 RxJava 简洁的人所认为的 **简洁** 更像是那种类似数学概念上的那种 **简洁**，这是因为函数式编程的抽象风格与数学更接近。我们举个例子，大家都知道牛顿第二定律，可是你知道牛顿在《自然哲学的数学原理》上发表牛顿二定律的时候的原始公式表示是什么样的吗：
 
-![Newton's second law](/images/newton's-second-law.jpg)
+![Newton's second law](http://prototypez.github.io/images/newton's-second-law.jpg)
 
 公式中的 **p** 表示动量，这是牛顿所认为的"简洁"，而我们大多数人认为简单好记的版本是 “**物体的加速度等于施加在物体上的力除以物体的质量**”。
 
@@ -192,8 +192,6 @@ networkApi.getAllPhotos()
 + [RxJava 沉思录（四）：总结](/2018/09/01/thoughts-in-rxjava-4/)
 
 ___
-***
----
 如果您对我的技术分享感兴趣，欢迎关注我的个人公众号：麻瓜日记，不定期更新原创技术分享，谢谢！:)
 
-![](/images/qrcode.jpg)
+![](http://prototypez.github.io/images/qrcode.jpg)

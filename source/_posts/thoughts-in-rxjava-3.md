@@ -166,7 +166,7 @@ clicks.buffer(clicks.debounce(500, TimeUnit.MILLISECONDS))
 
 我们平时使用的搜索框中，常常是当用户输入一部分内容后，下方就会显示对应的搜索提示，以支付宝为例，当在搜索框输入“蚂蚁”关键词后，下方自动刷新和关键词相关的结果：
 
-![](/images/alipay-demo.png)
+![](http://prototypez.github.io/images/alipay-demo.png)
 
 为了简化这个例子，我们不妨定义根据关键词搜索的接口如下：
 
@@ -210,8 +210,6 @@ RxTextView.textChanges(input)
 + [RxJava 沉思录（四）：总结](/2018/09/01/thoughts-in-rxjava-4/)
 
 ___
-***
----
 如果您对我的技术分享感兴趣，欢迎关注我的个人公众号：麻瓜日记，不定期更新原创技术分享，谢谢！:)
 
-![](/images/qrcode.jpg)
+![](http://prototypez.github.io/images/qrcode.jpg)
