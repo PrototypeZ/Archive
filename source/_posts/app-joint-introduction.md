@@ -38,7 +38,7 @@ Android 组件化的概念大概从两年前开始有人讨论，到目前为止
 
 ![](https://rawcdn.githack.com/PrototypeZ/AppJoint/master/app-joint-logo.png)
 
-## 模块独立运行
+## 模块独立运行遇到的问题
 
 本人接触最早的组件化方案是 [DDComponentForAndroid](https://github.com/luojilab/DDComponentForAndroid)，学习这个方案给了我很多启发，在这个方案中，作者提出，可以在 `gradle.properties` 中新增一个变量 `isRunAlone=true` ，用来控制某个业务模块是 **以 library 模块集成到 App 的全量编译中** 还是 **以 application 模块独立编译启动** 。不知道是不是很多人也受了相同的启发，后面很多的组件化框架都是使用类似的方案:
 
@@ -72,46 +72,62 @@ if (isRunAlone.toBoolean()) {
 
 最后还有一个问题，每当模块在 **application** 模式和 **library** 模式之间进行切换的时候，都需要重新 **Gradle Sync** 一次，我想既然是需要组件化的项目那肯定已经是那种编译速度极慢的项目了，即使是 **Gradle Sync** 也需要等待不少时间，这点也是我们不太能接收的。
 
-我们最后是如何解决模块的单独编译运行这个问题的呢？答案是 **为每个模块新建一个对应的 application 模块** 。也许你会对此表示怀疑：如果为每个业务模块配一个用于独立启动的 **application** 模块，模块会特别多，项目看起来会非常的乱的。但是其实我们可以把所有用于独立启动业务模块的 **application** 模块收录到一个目录中：
+## 使用多个 Application 模块
+
+我们最后是如何解决模块的单独编译运行这个问题的呢？答案是 **为每个模块新建一个对应的 application 模块** 。也许你会对此表示怀疑：如果为每个业务模块配一个用于独立启动的 **application** 模块，那模块会显得特别多，项目看起来会非常的乱的。但是其实我们可以把所有用于独立启动业务模块的 **application** 模块收录到一个目录中：
 
 ```
-yourProject
-+--app
-|  +--build
-|  +--src
-|  +--build.gradle
-+--module1
-|  +--build
-|  +--src
-|  +--build.gradle
-+--module2
-|  +--build
-|  +--src
-|  +--build.gradle
-+--standalone
-|  +--module1Standalone
-|  |  +--build
-|  |  +--src
-|  |  +--build.gradle
-|  +--module2Standalone   
-|  |  +--build
-|  |  +--src
-|  |  +--build.gradle
-+--build.gradle
-+--gradle.properties
-+--local.properties
-+--setting.gradle
+projectRoot
+  +--app
+  +--module1
+  +--module2
+  +--standalone
+  |  +--module1Standalone
+  |  +--module2Standalone   
 ```
 
-在上面这个项目结构图中，`app` 模块是全量编译的 **application** 模块入口，`module1` 和 `module2` 是两个业务 **library** 模块， `module1Standalone` 和 `module2Standalone` 是分别使用来独立启动 `module1` 和 `module2` 的 2 个 **application** 模块，这两个模块都被收录在 `standalone` 文件夹下面。
+在上面这个项目结构图中，`app` 模块是全量编译的 **application** 模块入口，`module1` 和 `module2` 是两个业务 **library** 模块， `module1Standalone` 和 `module2Standalone` 是分别使用来独立启动 `module1` 和 `module2` 的 2 个 **application** 模块，这两个模块都被收录在 `standalone` 文件夹下面。事实上，`standalone` 目录下的模块很少需要修改，所以这个目录大多数情况下是属于折叠状态，不会影响整个项目结构的美观。
 
+这样一来，在项目根目录下的 `settings.gradle` 里的代码是这样的：
 
+```groovy
+// main app
+include ':app'
+// library modules
+include ':module1'
+include ':module2'
+// for standalone modules
+include ':standalone:module1Standalone'
+include ':standalone:module2Standalone'
+```
 
+那些用于独立运行的 **application** 模块里的 `build.gradle` 文件中，就只有一个依赖，那就是需要被独立运行的 **library** 模块。以 `standalone/module1Standalone` 为例，它对应的 `build.gradle` 中的依赖为：
 
+```groovy
+dependencies {
+    implementation project(':module1')
+}
+```
 
-开闭原则
+> 在 Android Studio 中创建模块，默认模块是位于项目根目录之下的，如果希望把模块移动到某个文件夹下面，需要对模块右键，选择 "Refactor -- Move" 移动到指定目录之下。
+
+当我们创建好这些 **application** 模块之后，在 Android Studio 的运行小三角按钮旁边，就可以选择我们需要运行哪个模块了：
+
+![](/images/standalone.png)
+
+这样一来，我们首先可以感受到的一点就是模块不再需要改 **gradle.properties** 文件切换 **library** 和 **application** 状态了，也不再需要忍受 **Gradle Sync** 浪费宝贵的开发时间，想全量编译就全量编译，想单独启动就单独启动。
+
+由于专门用于单独启动的 **standalone 模块** 的存在，业务的 **library** 模块只需要按自己是 **library** 模块这一种情况开发即可，不需要考虑自己会变成 **application** 模块，所以无论是新开发一个业务模块还是从一个老的业务模块改造成组件化形式的模块，所要做的工作都会比之前更轻松。而之前提到的，为了让业务模块单独启动所需要的配置、初始化工作都可以放到 **standalone 模块** 里，并且不用担心这些代码被打包到最终 Release 的 App 中。
+
+`AndroidManifest.xml` 和资源文件的维护也变轻松了。四大组件的增删改只需要在业务的 **library** 模块修改即可，不需要维护两份 `AndroidManifest.xml` 了，**standalone 模块** 里的  `AndroidManifest.xml` 只需要包含模块独立启动时和 **library** 模块中的 `AndroidManifest.xml` 不同的地方即可（例如 Launcher Activity 、图标等），编译工具会自动完成两个文件的 merge。 
+
+我们分析一下这个方案，和原先的比，首先缺点是，引入了很多新的 **standalone 模块**，项目似乎变复杂了。但是优点也是明显的，组件化的逻辑更加清晰，尤其是在老项目改造情况下，所需要付出的工作量更少，而且不需要在开发期间频繁 **Gradle Sync**。 总的来说，改造后的组件化项目更符合软件工程的设计原则，尤其是[开闭原则](https://en.wikipedia.org/wiki/Open%E2%80%93closed_principle)（open for extension, but closed for modification）。
+
+介绍到这里为止，我们还没有使用任何 [AppJoint](https://github.com/PrototypeZ/AppJoint) 的 API，我们之所以没有借助任何组件化框架的 API 来实现模块的独立启动，是因为本文一开始提出的，**我们不希望项目和任何组件化框架强绑定**, 包括 **AppJoint** 框架本身，**AppJoint** 框架本身的设计是与项目松耦合的，所以使用了 **AppJoint** 框架进行组件化的项目，如果今后希望可以切换到其它更优秀的组件化方案，理论上会是很轻松的。
 
 ## 为每个模块准备 Application
+
+application 初始化逻辑课分为两类
 
 ## 跨模块方法的调用
 
