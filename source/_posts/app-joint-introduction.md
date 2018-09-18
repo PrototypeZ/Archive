@@ -36,7 +36,7 @@ Android 组件化的概念大概从两年前开始有人讨论，到目前为止
 
 基于上述的思想，我们开发了 [AppJoint](https://github.com/PrototypeZ/AppJoint) 这个框架用来帮助我们实现组件化。
 
-![](https://rawcdn.githack.com/PrototypeZ/AppJoint/master/app-joint-logo.png)
+![](https://raw.githubusercontent.com/PrototypeZ/AppJoint/master/app-joint-logo.png)
 
 ## 模块独立运行遇到的问题
 
@@ -123,11 +123,29 @@ dependencies {
 
 我们分析一下这个方案，和原先的比，首先缺点是，引入了很多新的 **standalone 模块**，项目似乎变复杂了。但是优点也是明显的，组件化的逻辑更加清晰，尤其是在老项目改造情况下，所需要付出的工作量更少，而且不需要在开发期间频繁 **Gradle Sync**。 总的来说，改造后的组件化项目更符合软件工程的设计原则，尤其是[开闭原则](https://en.wikipedia.org/wiki/Open%E2%80%93closed_principle)（open for extension, but closed for modification）。
 
-介绍到这里为止，我们还没有使用任何 [AppJoint](https://github.com/PrototypeZ/AppJoint) 的 API，我们之所以没有借助任何组件化框架的 API 来实现模块的独立启动，是因为本文一开始提出的，**我们不希望项目和任何组件化框架强绑定**, 包括 **AppJoint** 框架本身，**AppJoint** 框架本身的设计是与项目松耦合的，所以使用了 **AppJoint** 框架进行组件化的项目，如果今后希望可以切换到其它更优秀的组件化方案，理论上会是很轻松的。
+介绍到这里为止，我们还没有使用任何 [AppJoint](https://github.com/PrototypeZ/AppJoint) 的 API，我们之所以没有借助任何组件化框架的 API 来实现模块的独立启动，是因为本文一开始提出的，**我们不希望项目和任何组件化框架强绑定**, 包括 **AppJoint** 框架本身，**AppJoint** 框架本身的设计是与项目松耦合的，所以使用了 **AppJoint** 框架进行组件化的项目，如果今后希望可以切换到其它更优秀的组件化方案，理论上是很轻松的。
 
 ## 为每个模块准备 Application
 
-application 初始化逻辑课分为两类
+在组件化之前，我们常常把项目中需要在启动时完成的初始化行为，放在自定义的 `Application` 中，初始化行为可以分为以下两类：
+
+- **业务相关的初始化**。例如服务器推送长连接，数据库的准备，从服务器拉取 CMS 配置信息等。
+- **与业务无关的技术组件的初始化**。例如日志工具、统计工具、性能监控、崩溃收集、兼容性的方案等。
+
+我们在完成了上一步，为每个业务模块建立独立运行的 **standalone 模块** 以后，其实还并不能把业务模块独立启动起来，因为模块的初始化工作并没有完成。我们在前面介绍 **AppJoint** 的设计思想的时候，曾经说过我们希望组件化方案最好 『**不要有太多的学习成本，沿用目前已有的开发方式**』，所以这里我们的解决方案是，在每个业务模块里新建一个自定义的 `Application` 类，用来实现该业务模块的初始化逻辑，这里以在 `module1` 中新建自定义 `Application` 为例：
+
+```java
+@ModuleSpec("module1")
+public class Module1Application extends Application {
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        // do module1 initialization
+        Log.i("module1", "module1 init is called");
+    }
+}
+```
 
 ## 跨模块方法的调用
 
@@ -141,12 +159,6 @@ application 初始化逻辑课分为两类
 
 跨模块的方法调用，很多组件化框架给出的解决方案是通过框架自身的总线或者是通过 **URL-Scheme** 的方式进行调用。这一点是我们觉得不够优雅的地方，原因以及解决方案将在后面详细介绍。
 
-既然要造个新的轮子，那肯定要相比现有方案能解决更多的问题，我们制定如下目标：
-
-+ **轻量级：** 思想足够简单，即使团队加入了新成员，也可以在20分钟内理解组件化方案如何工作，并能上手；
-+ **无迁移成本：** 新功能使用组件化方案立即上手开发，原项目中的代码无需立即改造，逐步拆解为组件化开发模式；
-+ **高性能，无运行时开销：** 不会因为有跨组件的调用造成一些额外的性能开销，例如数据的序列化、反序列化以及反射等；
-+ **易于在模块的 Standalone 模式下的开发：**
 
 + **项目不与组件化框架强绑定：** 模块间调用
 
