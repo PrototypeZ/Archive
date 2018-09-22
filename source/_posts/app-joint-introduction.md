@@ -72,7 +72,7 @@ if (isRunAlone.toBoolean()) {
 
 最后还有一个问题，每当模块在 **application** 模式和 **library** 模式之间进行切换的时候，都需要重新 **Gradle Sync** 一次，我想既然是需要组件化的项目那肯定已经是那种编译速度极慢的项目了，即使是 **Gradle Sync** 也需要等待不少时间，这点也是我们不太能接收的。
 
-## 使用多个 Application 模块
+## 创建多个 Application 模块
 
 我们最后是如何解决模块的单独编译运行这个问题的呢？答案是 **为每个模块新建一个对应的 application 模块** 。也许你会对此表示怀疑：如果为每个业务模块配一个用于独立启动的 **application** 模块，那模块会显得特别多，项目看起来会非常的乱的。但是其实我们可以把所有用于独立启动业务模块的 **application** 模块收录到一个目录中：
 
@@ -130,9 +130,9 @@ dependencies {
 在组件化之前，我们常常把项目中需要在启动时完成的初始化行为，放在自定义的 `Application` 中，初始化行为可以分为以下两类：
 
 - **业务相关的初始化**。例如服务器推送长连接，数据库的准备，从服务器拉取 CMS 配置信息等。
-- **与业务无关的技术组件的初始化**。例如日志工具、统计工具、性能监控、崩溃收集、兼容性的方案等。
+- **与业务无关的技术组件的初始化**。例如日志工具、统计工具、性能监控、崩溃收集、兼容性方案等。
 
-我们在完成了上一步，为每个业务模块建立独立运行的 **standalone 模块** 以后，其实还并不能把业务模块独立启动起来，因为模块的初始化工作并没有完成。我们在前面介绍 **AppJoint** 的设计思想的时候，曾经说过我们希望组件化方案最好 『**不要有太多的学习成本，沿用目前已有的开发方式**』，所以这里我们的解决方案是，在每个业务模块里新建一个自定义的 `Application` 类，用来实现该业务模块的初始化逻辑，这里以在 `module1` 中新建自定义 `Application` 为例：
+我们在上一步中，为每个业务模块建立独立运行的 **standalone 模块** ，但是此时还并不能把业务模块独立启动起来，因为模块的初始化工作并没有完成。我们在前面介绍 **AppJoint** 的设计思想的时候，曾经说过我们希望组件化方案最好 『**不要有太多的学习成本，沿用目前已有的开发方式**』，所以这里我们的解决方案是，在每个业务模块里新建一个自定义的 `Application` 类，用来实现该业务模块的初始化逻辑，这里以在 `module1` 中新建自定义 `Application` 为例：
 
 ```java
 @ModuleSpec("module1")
@@ -146,6 +146,49 @@ public class Module1Application extends Application {
     }
 }
 ```
+
+如上面的代码所示，我们在 `module1` 中新建一个自定义的 `Application` 类，名为 `Module1Application`。那我们是不是应该把与这个模块有关的所有初始化逻辑都放在这个类里面呢？并不完全是这样。
+
+首先，对于前面提到的当前模块的 **业务相关的初始化** ，毫无疑问应该放在这个 `Module1Application` 类中，但是针对前面提到的该模块的 **与业务无关的技术组件的初始化** 放在这里就不是很合适了。
+
+首先，从逻辑上考虑，业务无关的技术组件的初始化应该放在一个统一的地方，把它们整个 App 全量编译的时候放在主 App 入口的 `Application` 类中比较合适，如果每个模块为了自己可以独立编译运行，都要自己初始化一遍，既不合理，也可能会造成潜在问题。
+
+那么，如果我们在 `Module1Application` 中做判断，如果它自身处于独立编译运行状态，就执行技术组件的初始化，反之，若它处于全量编译运行状态中，就不执行技术组件的初始化。理论上这种方案可行，但是这么做就会遇到和前面提到的 『在 `gradle.properties` 中维护一个变量来控制模块是否独立编译』同样的问题，我们不希望把和业务无关的逻辑（用于业务模块独立启动的逻辑）打包进最终 Release 的 App。 
+
+那应该如何解决这个问题呢？解决方案和前面一小节类似，我们不是为 `module1` 模块准备了一个 `module1Standalone` 模块吗？既然技术相关的组件的初始化并不是 `module1` 模块的核心，只和 `module1` 模块的独立启动有关，那么放在 `module1Standalone` 模块里是最合适的，因为这个模块只会在 `module1` 的独立编译运行中使用到，它的任何代码都不会被打包到最终 Release 的 App 中。我们可以在 `module1Standalone` 中定义一个 `Module1StandaloneApplication` 类，它从 `Module1Application` 继承下来：
+
+```java
+public class Module1StandaloneApplication extends Module1Application {
+
+    @Override
+    public void onCreate() {
+        // module1 init inside super.onCreate()
+        super.onCreate();
+        // initialization only used for running module1 standalone
+        Log.i("module1Standalone", "module1Standalone init is called");
+    }
+}
+```
+
+并且我们在 `module1Standalone` 模块的 `AndroidManifest.xml` 中把 `Module1StandaloneApplication` 设置为 Standalone App 使用的自定义 `Application` 类：
+
+```xml
+    <application
+        android:icon="@mipmap/module1_launcher"
+        android:label="@string/module1_app_name"
+        android:theme="@style/AppTheme"
+        android:name=".Module1StandaloneApplication">
+        <activity android:name=".Module1MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+    </application>
+```
+
+每个模块的入口MainActivity可以写在standalone。
+
 
 ## 跨模块方法的调用
 
