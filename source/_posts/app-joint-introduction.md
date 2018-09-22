@@ -56,7 +56,7 @@ if(isRunAlone.toBoolean()){
 
 这两种情况，如果我们使用 `gradle.properties` 中的变量来切换 **application** 和 **library** 的话，我们势必需要在这个模块中维护两套逻辑，一套是在 **application** 模式下的启动逻辑，一套是在 **library** 模式下的启动逻辑。原先这个模块是专注自己本身的业务逻辑的，现在不得不为了能够独立作为 **application** 启动，而加入许多其他代码。一方面 `build.gradle` 文件中会充满很多 `if - else`，另一方面 Java 源码中也会加入许多判断是否独立运行的逻辑。
 
-最终 Release App 打包时，这些模块是作为 **library** 存在的，但是我们为了组件化已经在这个模块中加入了很多帮助该模块独立运行（以 **application** 模式）的代码，虽然这些代码在线上不会生效，可是从洁癖的角度来讲，这些代码其实不应该被打包进去。其实说了这么多无非就是想说明，如果我们希望通过某个变量来控制模块以 **application** 形式还是以 **library** 形式存在，那么我们肯定要在这个模块中加入维护两者的差异的代码，而且可能代码量还不少，最后代码呈现的状态可能是不太优雅的。
+最终 Release App 打包时，这些模块是作为 **library** 存在的，但是我们为了组件化已经在这个模块中加入了很多帮助该模块独立运行（以 **application** 模式）的代码（例如模块需要单独运行，需要一个属于这个模块的 Laucher Activity），虽然这些代码在线上不会生效，可是从洁癖的角度来讲，这些代码其实不应该被打包进去。其实说了这么多无非就是想说明，如果我们希望通过某个变量来控制模块以 **application** 形式还是以 **library** 形式存在，那么我们肯定要在这个模块中加入维护两者的差异的代码，而且可能代码量还不少，最后代码呈现的状态可能是不太优雅的。
 
 此外模块中的 `AndroidManifest.xml` 也需要维护两份：
 
@@ -101,6 +101,15 @@ include ':standalone:module1Standalone'
 include ':standalone:module2Standalone'
 ```
 
+在主 App 模块（`app` 模块）的 `build.gradle` 文件里，我们只需要依赖 `module1` 和 `module2` ，两个 **standalone** 模块只和各自对应的业务模块的独立启动有关，它们不需要被 `app` 模块依赖，所以 `app` 模块的 `build.gradle` 中的依赖部分代码如下：
+
+```groovy
+dependencies {
+    implementation project(':module1')
+    implementation project(':module1')
+}
+```
+
 那些用于独立运行的 **application** 模块里的 `build.gradle` 文件中，就只有一个依赖，那就是需要被独立运行的 **library** 模块。以 `standalone/module1Standalone` 为例，它对应的 `build.gradle` 中的依赖为：
 
 ```groovy
@@ -117,7 +126,7 @@ dependencies {
 
 这样一来，我们首先可以感受到的一点就是模块不再需要改 **gradle.properties** 文件切换 **library** 和 **application** 状态了，也不再需要忍受 **Gradle Sync** 浪费宝贵的开发时间，想全量编译就全量编译，想单独启动就单独启动。
 
-由于专门用于单独启动的 **standalone 模块** 的存在，业务的 **library** 模块只需要按自己是 **library** 模块这一种情况开发即可，不需要考虑自己会变成 **application** 模块，所以无论是新开发一个业务模块还是从一个老的业务模块改造成组件化形式的模块，所要做的工作都会比之前更轻松。而之前提到的，为了让业务模块单独启动所需要的配置、初始化工作都可以放到 **standalone 模块** 里，并且不用担心这些代码被打包到最终 Release 的 App 中。
+由于专门用于单独启动的 **standalone 模块** 的存在，业务的 **library** 模块只需要按自己是 **library** 模块这一种情况开发即可，不需要考虑自己会变成 **application** 模块，所以无论是新开发一个业务模块还是从一个老的业务模块改造成组件化形式的模块，所要做的工作都会比之前更轻松。而之前提到的，为了让业务模块单独启动所需要的配置、初始化工作都可以放到 **standalone 模块** 里，并且不用担心这些代码被打包到最终 Release 的 App 中，前面例子中提到的用来使模块单独启动的 Launcher Activity，只要把它放到 **standalone 模块** 模块即可。
 
 `AndroidManifest.xml` 和资源文件的维护也变轻松了。四大组件的增删改只需要在业务的 **library** 模块修改即可，不需要维护两份 `AndroidManifest.xml` 了，**standalone 模块** 里的  `AndroidManifest.xml` 只需要包含模块独立启动时和 **library** 模块中的 `AndroidManifest.xml` 不同的地方即可（例如 Launcher Activity 、图标等），编译工具会自动完成两个文件的 merge。 
 
@@ -127,12 +136,12 @@ dependencies {
 
 ## 为每个模块准备 Application
 
-在组件化之前，我们常常把项目中需要在启动时完成的初始化行为，放在自定义的 `Application` 中，初始化行为可以分为以下两类：
+在组件化之前，我们常常把项目中需要在启动时完成的初始化行为，放在自定义的 `Application` 中，根据本人的项目经验，初始化行为可以分为以下两类：
 
-- **业务相关的初始化**。例如服务器推送长连接，数据库的准备，从服务器拉取 CMS 配置信息等。
+- **业务相关的初始化**。例如服务器推送长连接建立，数据库的准备，从服务器拉取 CMS 配置信息等。
 - **与业务无关的技术组件的初始化**。例如日志工具、统计工具、性能监控、崩溃收集、兼容性方案等。
 
-我们在上一步中，为每个业务模块建立独立运行的 **standalone 模块** ，但是此时还并不能把业务模块独立启动起来，因为模块的初始化工作并没有完成。我们在前面介绍 **AppJoint** 的设计思想的时候，曾经说过我们希望组件化方案最好 『**不要有太多的学习成本，沿用目前已有的开发方式**』，所以这里我们的解决方案是，在每个业务模块里新建一个自定义的 `Application` 类，用来实现该业务模块的初始化逻辑，这里以在 `module1` 中新建自定义 `Application` 为例：
+我们在上一步中，为每个业务模块建立了独立运行的 **standalone 模块** ，但是此时还并不能把业务模块独立启动起来，因为模块的初始化工作并没有完成。我们在前面介绍 **AppJoint** 的设计思想的时候，曾经说过我们希望组件化方案最好 『**不要有太多的学习成本，沿用目前已有的开发方式**』，所以这里我们的解决方案是，在每个业务模块里新建一个自定义的 `Application` 类，用来实现该业务模块的初始化逻辑，这里以在 `module1` 中新建自定义 `Application` 为例：
 
 ```java
 @ModuleSpec("module1")
@@ -151,9 +160,9 @@ public class Module1Application extends Application {
 
 首先，对于前面提到的当前模块的 **业务相关的初始化** ，毫无疑问应该放在这个 `Module1Application` 类中，但是针对前面提到的该模块的 **与业务无关的技术组件的初始化** 放在这里就不是很合适了。
 
-首先，从逻辑上考虑，业务无关的技术组件的初始化应该放在一个统一的地方，把它们整个 App 全量编译的时候放在主 App 入口的 `Application` 类中比较合适，如果每个模块为了自己可以独立编译运行，都要自己初始化一遍，既不合理，也可能会造成潜在问题。
+首先，从逻辑上考虑，业务无关的技术组件的初始化应该放在一个统一的地方，把它们放在主 App 的自定义 `Application` 类中比较合适，如果每个模块为了自己可以独立编译运行，都要自己初始化一遍，那么所有代码最后一起全量编译的时候，这些初始化行为就会在代码中出现好几次，这样既不合理，也可能会造成潜在问题。
 
-那么，如果我们在 `Module1Application` 中做判断，如果它自身处于独立编译运行状态，就执行技术组件的初始化，反之，若它处于全量编译运行状态中，就不执行技术组件的初始化。理论上这种方案可行，但是这么做就会遇到和前面提到的 『在 `gradle.properties` 中维护一个变量来控制模块是否独立编译』同样的问题，我们不希望把和业务无关的逻辑（用于业务模块独立启动的逻辑）打包进最终 Release 的 App。 
+那么，如果我们在 `Module1Application` 中做判断，如果它自身处于独立编译运行状态，就执行技术组件的初始化，反之，若它处于全量编译运行状态中，就不执行技术组件的初始化，由主 App 的 `Application` 来实现这些逻辑，这样是否可以呢？理论上这种方案可行，但是这么做就会遇到和前面提到的 『在 `gradle.properties` 中维护一个变量来控制模块是否独立编译』同样的问题，我们不希望把和业务无关的逻辑（用于业务模块独立启动的逻辑）打包进最终 Release 的 App。 
 
 那应该如何解决这个问题呢？解决方案和前面一小节类似，我们不是为 `module1` 模块准备了一个 `module1Standalone` 模块吗？既然技术相关的组件的初始化并不是 `module1` 模块的核心，只和 `module1` 模块的独立启动有关，那么放在 `module1Standalone` 模块里是最合适的，因为这个模块只会在 `module1` 的独立编译运行中使用到，它的任何代码都不会被打包到最终 Release 的 App 中。我们可以在 `module1Standalone` 中定义一个 `Module1StandaloneApplication` 类，它从 `Module1Application` 继承下来：
 
@@ -187,13 +196,85 @@ public class Module1StandaloneApplication extends Module1Application {
     </application>
 ```
 
-每个模块的入口MainActivity可以写在standalone。
+这样，只要我们单独运行 `module1Standalone` 这个模块的时候，使用的 `Application` 类就是 `Module1StandaloneApplication`。在开发时，我们需要单独调试 `module1` 时，我们只需要启动 `module1Standalone` 这个模块进行调试即可；而在 App 需要全量编译时，我们则正常启动原来的主 App 。无论是哪种情况， `module1` 这个模块始终是以 `library` 形式存在的，**这意味着，如果我们希望把原先的业务模块改造成组件化模块，需要的改造量缩小很多**，我们改造的过程主要是在 **增加代码**，而不是 **修改代码**，这点符合软件工程中的『**开闭原则**』。
 
+写到这里，我们其实还有一个问题没有解决。`Module1Application` 目前除了被 `Module1StandaloneApplication` 继承以外，没有被任何其它地方引用到。您可能会有疑问：那我们如何保证 App 全量编译运行时，`Module1Application` 里的初始化逻辑会被调用到呢？细心的您可能早就已经发现了：我们在上面定义 `Module1Application` 时，同时标记了一个注解 `@ModuleSpec`:
+
+```java
+@ModuleSpec("module1")
+public class Module1Application extends Application {
+    ...
+}
+```
+
+这个注解的作用是告知 **AppJoint** 框架，我们需要确保当前模块该 `Application` 中的初始化行为，能够在最终全量编译时，被主 App 的 `Application` 类调用到。所以对应的，我们的主 App 模块（`app` 模块）的自定义 `Application` 类也需要被一个注解 -- `ModulesSpec` 标记，代码如下所示：
+
+```java
+@ModulesSpec({"module1", "module2"})
+public class App extends Application {
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        
+    }
+}
+```
+
+上面代码中的 `App` 为主 App 对应的自定义 `Application` 类，我们给这个类上方标记了 `@ModulesSpec` 注解，告诉 `App` 在项目中包含两个子模块 `module1`, `module2`，需要在执行 `App` 自身初始化的同时一并执行这些子模块的 `Application` 里对应声明周期的初始化。即：
+ 
++ `App` 执行 `onCreate` 方法时，保证也同时执行 `Module1Application` 和 `Module2Application` 的 `onCreate` 方法 。
++ `App` 执行 `attachBaseContext` 方法时，保证也同时执行 `Module1Application` 和 `Module2Application` 的 `attachBaseContext` 方法。 
++ 依次类推，当 `App` 执行某个生命周期方法时，保证子模块的 `Application` 的对应的生命周期方法也会被执行。
+
+这样，我们通过 **AppJoint** 的 `@ModuleSpec` 和 `@ModulesSpec` 两个注解，在主 App 的 `Application` 和子模块的 `Application` 之间建立了联系，保证了在全量编译运行时，所有业务模块的初始化行为都能被保证执行。
+
+到这里为止，我们已经处理好了业务模块在 **独立编译运行模式** 和 **全量编译运行模式** 这两种情况下的初始化问题，目前关于 `Application` 还有一个潜在问题，我们的项目在组件化之前，我们经常会在 `Applictaion` 类的 `onCreate` 周期保存当前 `Appliction` 的引用，然后在应用的任何地方都可以使用这个 `Application` 对象，例如下面这样：
+
+```java
+public class App extends Application {
+
+    public static App INSTANCE;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        INSTANCE = this;
+    }
+}
+```
+
+这么处理之后，我们可以在项目任意位置通过 `App.INSTANCE` 使用 **Application Context** 对象。但是，现在组件化改造以后，以 `module1` 为例，在独立运行模式时，应用的 `Application` 对象是 `Module1StandaloneApplication` 的实例，而在全量编译运行模式时，应用的 `Application` 对象是主 App 模块的 `App` 的实例，我们如何能像之前一样，做到在项目中任何一个地方都能获取到当前使用的 `Application` 实例呢？我们对 `Module1Application` 做以下改造：
+
+```java
+@ModuleSpec("module1")
+public class Module1Application extends Application {
+    
+    public static Application INSTANCE;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        // do module1 initialization
+        Log.i("module1", "module1 init is called");
+    }
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(base);
+        INSTANCE = (Application) base.getApplicationContext();
+    }
+}
+```
+
+我们把对 `INSTANCE` 变量的赋值移动到了 `attachBaseContext` 这个回调里，那么首先在 `module1` 单独编译运行模式下，`INSTANCE` 肯定是被赋了正确的值没错的；即使在全量编译运行模式下，由于 **AppJoint** 框架 **保证了当主 App 的 `App` 对象被调用 `attachBaseContext` 回调时，所有组件化业务模块的 `Application` 也会被调用 `attachBaseContext` 这个回调**，所以此时 `Module1Application` 在 `attachBaseContext` 里获得到的 `Application` 对象也是当前正确的值。这样，我们在 `module1` 这个模块里的任何位置使用 `Module1Application.INSTANCE` 总能正确地获得 `Application` 的实例。对应的，我们使用相同的方法在 `module2` 这个模块里，也可以在任何位置使用 `Module2Application.INSTANCE` 正确地获得 `Application` 的实例，而不需要知道当前处于独立编译运行状态还是全量编译运行状态。
+
+> 由于 `attachBaseContext` 比 `onCreate` 更先回调，所以 `onCreate` 里的原有逻辑不需要改动，但是有一点需要留意，所有需要使用 **Application Context** 的地方，**一定要** 使用在 `attachBaseContext` 里获得到的实例（例如 `Module1Application.INSTANCE` ），**一定不要** 和该业务模块自身定义的 `Application` 类有任何耦合（例如 `Module1Application`），因为在运行时真正使用的 `Application` 实例可能不是它。
 
 ## 跨模块方法的调用
 
 
-
+## 
 
 
 我心目中理想的组件化方案应该是这样的：
@@ -203,12 +284,7 @@ public class Module1StandaloneApplication extends Module1Application {
 跨模块的方法调用，很多组件化框架给出的解决方案是通过框架自身的总线或者是通过 **URL-Scheme** 的方式进行调用。这一点是我们觉得不够优雅的地方，原因以及解决方案将在后面详细介绍。
 
 
-+ **项目不与组件化框架强绑定：** 模块间调用
-
 + **类型安全、易于重构：** 对于跨组件之间的调用，应当发挥静态类型语言的编译器检查的优势;
-
-
-## 模块的独立运行
 
 ### 单独运行模式下，调用其他模块
 
