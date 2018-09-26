@@ -196,6 +196,8 @@ public class Module1StandaloneApplication extends Module1Application {
     </application>
 ```
 
+> 在上面的代码中，我们除了设置了自定义的 `Application` 以外，还设置了一个 **Launcher Activity** (`Module1MainActivity`)，这个 `Activity` 即为模块的启动 `Activity`，由于它只存在于模块的独立编译运行期间，App 全量打包时是不包含这个 `Module1MainActivity` 的，所以我们可以在里面定义一些方便模块独立调试的功能，例如快速前往某个页面以及创建 Mock 数据。
+
 这样，只要我们单独运行 `module1Standalone` 这个模块的时候，使用的 `Application` 类就是 `Module1StandaloneApplication`。在开发时，我们需要单独调试 `module1` 时，我们只需要启动 `module1Standalone` 这个模块进行调试即可；而在 App 需要全量编译时，我们则正常启动原来的主 App 。无论是哪种情况， `module1` 这个模块始终是以 `library` 形式存在的，**这意味着，如果我们希望把原先的业务模块改造成组件化模块，需要的改造量缩小很多**，我们改造的过程主要是在 **增加代码**，而不是 **修改代码**，这点符合软件工程中的『**开闭原则**』。
 
 写到这里，我们其实还有一个问题没有解决。`Module1Application` 目前除了被 `Module1StandaloneApplication` 继承以外，没有被任何其它地方引用到。您可能会有疑问：那我们如何保证 App 全量编译运行时，`Module1Application` 里的初始化逻辑会被调用到呢？细心的您可能早就已经发现了：我们在上面定义 `Module1Application` 时，同时标记了一个注解 `@ModuleSpec`:
@@ -271,8 +273,13 @@ public class Module1Application extends Application {
 
 > 由于 `attachBaseContext` 比 `onCreate` 更先回调，所以 `onCreate` 里的原有逻辑不需要改动，但是有一点需要留意，所有需要使用 **Application Context** 的地方，**一定要** 使用在 `attachBaseContext` 里获得到的实例（例如 `Module1Application.INSTANCE` ），**一定不要** 和该业务模块自身定义的 `Application` 类有任何耦合（例如 `Module1Application`），因为在运行时真正使用的 `Application` 实例可能不是它。
 
+我们已经解决业务模块在 **单独编译运行模式** 下和在 **App 全量编译模式** 下，初始化逻辑应该如何组织的问题。我们沿用了我们熟悉的自定义 `Application` 方案，来承载各个模块的初始化行为，同时利用 **AppJoint** 这个胶水，把每个模块的初始化逻辑集成到最终全量编译的 App 中。而这一切和 **AppJoint** 有关的 API 仅仅是两个注解，这里很好的说明了 **AppJoint** 是个学习成本低的工具，我们可以沿用我们已有的开发方式而不是改造我们的逻辑使得代码和组件化框架造成过度耦合。
+
+虽然目前每个模块已经有独立编译运行的可能了，但是开发一个成熟的 App 我们还有一个重要的问题没有解决，那就是跨模块的方法调用。
+
 ## 跨模块方法的调用
 
+因为我们的业务模块无论是在逻辑上还是在依赖树上，都应该是相同地位的。
 
 ## 
 
