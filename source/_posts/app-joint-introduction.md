@@ -38,6 +38,8 @@ Android 组件化的概念大概从两年前开始有人讨论，到目前为止
 
 ![](https://raw.githubusercontent.com/PrototypeZ/AppJoint/master/app-joint-logo.png)
 
+**AppJoint** 是一个非常简单有效的方案，引入 **AppJoint** 进行组件化所有的 API 只包含 **3** 个注解，加 **1** 个方法，这可能是目前最简单的组件化方案了，我们的框架不追求功能要多么复杂强大，只专注于框架本身实用、简单与高效。
+
 ## 模块独立运行遇到的问题
 
 本人接触最早的组件化方案是 [DDComponentForAndroid](https://github.com/luojilab/DDComponentForAndroid)，学习这个方案给了我很多启发，在这个方案中，作者提出，可以在 `gradle.properties` 中新增一个变量 `isRunAlone=true` ，用来控制某个业务模块是 **以 library 模块集成到 App 的全量编译中** 还是 **以 application 模块独立编译启动** 。不知道是不是很多人也受了相同的启发，后面很多的组件化框架都是使用类似的方案:
@@ -129,6 +131,8 @@ dependencies {
 由于专门用于单独启动的 **standalone 模块** 的存在，业务的 **library** 模块只需要按自己是 **library** 模块这一种情况开发即可，不需要考虑自己会变成 **application** 模块，所以无论是新开发一个业务模块还是从一个老的业务模块改造成组件化形式的模块，所要做的工作都会比之前更轻松。而之前提到的，为了让业务模块单独启动所需要的配置、初始化工作都可以放到 **standalone 模块** 里，并且不用担心这些代码被打包到最终 Release 的 App 中，前面例子中提到的用来使模块单独启动的 Launcher Activity，只要把它放到 **standalone 模块** 模块即可。
 
 `AndroidManifest.xml` 和资源文件的维护也变轻松了。四大组件的增删改只需要在业务的 **library** 模块修改即可，不需要维护两份 `AndroidManifest.xml` 了，**standalone 模块** 里的  `AndroidManifest.xml` 只需要包含模块独立启动时和 **library** 模块中的 `AndroidManifest.xml` 不同的地方即可（例如 Launcher Activity 、图标等），编译工具会自动完成两个文件的 merge。 
+
+> 推荐在 **standalone 模块** 内指定一个不同于主 App 的 applicationId，即模块单独启动的 App 与主 App 可以在手机内共存。
 
 我们分析一下这个方案，和原先的比，首先缺点是，引入了很多新的 **standalone 模块**，项目似乎变复杂了。但是优点也是明显的，组件化的逻辑更加清晰，尤其是在老项目改造情况下，所需要付出的工作量更少，而且不需要在开发期间频繁 **Gradle Sync**。 总的来说，改造后的组件化项目更符合软件工程的设计原则，尤其是[开闭原则](https://en.wikipedia.org/wiki/Open%E2%80%93closed_principle)（open for extension, but closed for modification）。
 
@@ -305,8 +309,8 @@ projectRoot
 在上面的项目结构层次中，我们在新建的 `router` 模块下定义了 3 个 **接口**：
 
 + `AppRouter` 接口声明了 `app` 模块暴露给 `module1`、`module2` 的方法的定义。
-+ `Module1Router` 接口声明了 `app` 模块暴露给 `app`、`module2` 的方法的定义。
-+ `Module2Router` 接口声明了 `app` 模块暴露给 `module1`、`app` 的方法的定义。
++ `Module1Router` 接口声明了 `module1` 模块暴露给 `app`、`module2` 的方法的定义。
++ `Module2Router` 接口声明了 `module2` 模块暴露给 `module1`、`app` 的方法的定义。
 
 以 `AppRouter` 接口文件为例，这个接口的定义如下：
 
@@ -336,9 +340,11 @@ public interface AppRouter {
 dependencies {
     // Other dependencies
     ...
-    implementation project(":router")
+    api project(":router")
 }
 ```
+
+> 这里依赖 `router` 模块的方式是使用 `api` 而不是 `implementation` 是为了把 `router` 模块的信息暴露给依赖了这些业务模块的 **standalone 模块**，`app` 模块由于没有别的模块依赖它，不受上面所说的限制，可以写成 `implementation` 依赖。
 
 然后我们回到 `app` 模块，为刚刚在 `router` 定义的 `AppRouter` 接口提供一个实现：
 
@@ -391,7 +397,7 @@ appRouter.asyncMethod2OfApp(new Callback<String>() {
 });
 ```
 
-在上面的代码中，我们可以看到，除了第一步获取 `AppRouter` 接口的实例我们用到了 **AppJoint** 的 API `AppJoint.getRouter` 以外，剩下的代码，`module1` 调用 `app` 模块内的方法的方式，和我们原来的开发方式没有任何区别。
+在上面的代码中，我们可以看到，除了第一步获取 `AppRouter` 接口的实例我们用到了 **AppJoint** 的 API `AppJoint.getRouter` 以外，剩下的代码，`module1` 调用 `app` 模块内的方法的方式，和我们原来的开发方式没有任何区别。`AppJoint.getRouter` 就是 **AppJoint** 所有 API 里唯一的那个方法。
 
 也就是说，如果一个模块需要提供方法供其他模块调用，需要做以下步骤：
 
@@ -412,6 +418,150 @@ Module2Router module2Router = AppJoint.getRouter(Module2Router.class);
 
 上面一个小结中我们已经介绍了使用 **AppJoint** 在 App 全量编译运行期间，业务模块之间跨模块方法调用的解决方案。在全量编译期间，我们可以通过 `AppJoint.getRouter` 这个方法找到指定模块提供的接口的实例，但是在模块单独编译运行期间，其它的模块是不参与编译的，它们的代码也不会打包进用于模块独立运行的 **standalaone 模块**，我们如何解决在模块单独编译运行模式下，跨模块调用的代码依然有效呢？
 
+以 `module1` 为例，首先为了便于在 `module1` 内部任何地方都可以调用其它模块的方法，我们创建一个 `RouterServices` 类用于存放其它模块的接口的实例：
+
+```java
+public class RouterServices {
+    // app 模块对外暴露的接口
+    public static AppRouter sAppRouter = AppJoint.getRouter(AppRouter.class);
+    // module2 模块对外暴露的接口
+    public static Module2Router sModule2Router = AppJoint.getRouter(Module2Router.class);
+}
+```
+
+有了这个类以后，我们在 `module1` 内部如果需要调用其它模块的功能，我们只需要使用 `RouterServices.sAppRouter` 和 `RouterServices.sModule2Router` 这两个对象就可以了。但是如果是刚刚提到的 `module1` 独立编译运行的情况，即启动的 `application` 模块是 `module1Standalone`， 那么 `RouterServices.sAppRouter` 和 `RouterServices.sModule2Router` 这两个对象的值均为 `null` ，这种情况下因为 `app` 和 `module2` 这两个模块是没有被编译进来的。
+
+如果我们需要在这种情况下保证已有的 `module1` 内部的通过 `RouterServices.sAppRouter` 和 `RouterServices.sModule2Router` 进行跨模块方法调用的代码依然能工作，我们就需要对这两个引用手动赋值，即我们需要创建 Mock 了 `AppRouter` 和 `Module2Router` 功能的类。这些类由于只对 `module1` 的独立编译运行有意义，所以这些类最合适的位置是放在 `module1Standalone` 这个模块内，以 `AppRouter` 的 Mock 类 `AppRouterMock` 为例：
+
+```java
+public class AppRouterMock implements AppRouter {
+    @Override
+    public String syncMethodOfApp() {
+        return "mockSyncMethodOfApp";
+    }
+
+    @Override
+    public Observable<String> asyncMethod1OfApp() {
+        return Observable.just("mockAsyncMethod1OfApp");
+    }
+
+    @Override
+    public void asyncMethod2OfApp(final Callback<String> callback) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                callback.onResult("mockAsyncMethod2Result");
+            }
+        }).start();
+    }
+}
+```
+
+已经创建好了 Mock 类，接下来我们要做的是，在 `module1` 独立编译运行的模式下，用 Mock 类的对象，去替换 `RouterServices` 里面的对应的引用，由于这些逻辑只和 `module1` 的独立编译运行有关，我们不希望这些逻辑被打包进真正 Release 的 App 中，那么最合适的地方就是 `Module1StandaloneApplication`里了：
+
+```java
+public class Module1StandaloneApplication extends Module1Application {
+
+    @Override
+    public void onCreate() {
+        // module1 init inside super.onCreate()
+        super.onCreate();
+        // initialization only used for running module1 standalone
+        Log.i("module1Standalone", "module1Standalone init is called");
+
+        // Replace instances inside RouterServices
+        RouterServices.sAppRouter = new AppRouterMock();
+        RouterServices.sModule2Router = new Module2RouterMock();
+    }
+}
+```
+
+有了上面的初始化动作以后，我们就可以在 `module1` 内部安全地使用 `RouterServices.sAppRouter` 和 `RouterServices.sModule2Router` 这两个对象进行跨模块的方法调用了，无论当前是处于 App 全量编译模式还是 `modul1Standalone` 独立编译运行模式。
+
+## 跨模块启动 Activity 和 Fragment
+
+在组件化改造过程中，除了跨模块的方法调用之外，跨模块启动 Activity 和跨模块引用 Fragment 也是我们经常遇到的需求。目前社区中大多数组件化方案都是使用自定义私有协议，使用 **URL-Scheme** 的方式来实现跨模块 Activity 的启动，这一块已经有很多成熟的方案了，有的组件化方案直接推荐使用 **ARouter** 来实现这块功能。**但是 AppJoint 没有使用这类方案**。
+
+本文开头曾经介绍过，**AppJoint** 所有的 API 只包含 **3** 个注解加 **1** 个方法，而这些 API 我们在前文中已经都介绍完了，也就是说，**我们没有提供专门的 API 来实现跨模块的 Activity / Fragment 调用**。
+
+我们回想一下，在没有实现组件化时，我们启动 Activity 的推荐写法如下，首先在被启动的 Activity 内实现一个静态 `start` 方法:
+
+```java
+public class MyActivity extends AppCompatActivity {
+
+    public static void start(Context context, String param1, Integer param2) {
+        Intent intent = new Intent(context, MyActivity.class);  
+        intent.putExtra("param1", param1);  
+        intent.putExtra("param2", param2);  
+        context.startActivity(intent);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        ...
+    }
+}
+```
+
+然后我们如果在其它 Activity 中启动这个 `MyActivity` 的话，写法如下：
+
+ ```java
+ MyActivity.start(param1, param2);
+ ```
+
+这里的思想是，服务的提供者应该把复杂的逻辑放在自己这里，而只提供给调用者一个简单的接口，用这个简单的接口隔离具体实现的复杂性，这是符合软件工程思想的。
+
+那么如果目前 `module1` 模块中有一个 `Module1Activity`，现在这个 Activity 希望能够从 `module2` 启动，应该如何写呢？首先，在 `router` 模块的 `Module1Router` 内声明启动 `Module1Activity` 的方法：
+
+```java
+public interface Module1Router {
+    ...
+    // 启动 Module1Activity
+    void startModule1Activity(Context context);
+}
+```
+
+然后在 `module1` 模块里 `Module1Router` 对应的实现类 `Module1RouterImpl` 中实现刚刚定义的方法：
+
+```java
+public class Module1RouterImpl implements Module1Router {
+
+    ...
+
+    @Override
+    public void startModule1Activity(Context context) {
+        Intent intent = new Intent(context, Module1Activity.class);
+        context.startActivity(intent);
+    }
+}
+```
+
+这样， `module2` 中就可以通过下面的方式启动 `module1` 中的 `Module1Activity` 了。
+
+```java
+RouterServices.sModule1Router.startModule1Activity(context);
+```
+
+跨模块获取 `Fragment` 实例也是类似的方法，我们在 `Module1Router` 里继续声明方法： 
+
+```java
+public interface Module1Router {
+    ...
+    // 启动 Module1Activity
+    void startModule1Activity(Context context);
+
+    // 获取 Module1Fragment
+    Fragment obtainModule1Fragment();
+}
+```
+
+差不多的，我们只要在 `Module1RouterImpl` 里接着实现方法即可，这里不再赘述。
+
+与 URL scheme 进行比较
+
+> Mock startActivity
+
 
 
 我心目中理想的组件化方案应该是这样的：
@@ -423,21 +573,13 @@ Module2Router module2Router = AppJoint.getRouter(Module2Router.class);
 
 + **类型安全、易于重构：** 对于跨组件之间的调用，应当发挥静态类型语言的编译器检查的优势;
 
-## 如何跨模块启动 Activity/Fragment
-
-## 组件的概念/维度
-
-## 
-
-## 如何使用
-
-
-
 ## 总结
 
 文章很长，感谢您耐心读完。由于本人能力有限，文章可能存在纰漏的地方，欢迎各位指正。关于如何对业务流程进行封装，因为我并没有看到过很多技术文章对这一块进行讨论，所以我个人的见解会有不全面的地方，如果您有更好的方案，欢迎一起讨论。谢谢大家！
 
 ## 简单直接，而且够用
+
+## 带 Router 的结构图
 
 ## 关注我的公众号
 
