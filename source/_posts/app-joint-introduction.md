@@ -1,5 +1,5 @@
 ---
-title: 回归初心：轻量级 Android 组件化方案 — AppJoint
+title: 回归初心：极简 Android 组件化方案 — AppJoint
 tags: Android 组件化
 date: 2018-09-15 14:26:00
 desc: 更适合中小团队的 Android 组件化方案，简洁有效
@@ -285,6 +285,8 @@ public class Module1Application extends Application {
 
 此外，上图的这种形态是组件化的最终的理想状态，如果我们要将项目改造以达到这种状态，毫无疑问需要付出巨大的时间成本。在业务快速迭代期间，这是我们无法承担的成本，我们只能逐渐地改造项目，也就是说，`App` 模块内的业务代码是被逐渐拆解出来形成新的独立模块的，这意味着在组件化过程的相当长一段时间内，`App` 内还是存在业务代码的，而被拆解出来的模块内的业务逻辑代码，是有可能调用到 `App` 模块内的代码的。这是一种很尴尬的状态，在依赖层次中，位于依赖层次较低位置的代码反而要去调用依赖层次较高位置的代码。
 
+针对这种情况，我们比较容易想到，我们再新建一个模块，例如 `router` 模块，我们在这个模块内定义 **所有业务模块希望暴露给其它模块调用的方法**，如下图：
+
 ```
 projectRoot
   +--app
@@ -295,13 +297,121 @@ projectRoot
   |  +--main
   |  |  +--java
   |  |  |  +--com.yourPackage
-  |  |  |  |  +--AppRouter
-  |  |  |  |  +--Module1Router
-  |  |  |  |  +--Module2Router
+  |  |  |  |  +--AppRouter.java
+  |  |  |  |  +--Module1Router.java
+  |  |  |  |  +--Module2Router.java
 ```
 
+在上面的项目结构层次中，我们在新建的 `router` 模块下定义了 3 个 **接口**：
 
-## 
++ `AppRouter` 接口声明了 `app` 模块暴露给 `module1`、`module2` 的方法的定义。
++ `Module1Router` 接口声明了 `app` 模块暴露给 `app`、`module2` 的方法的定义。
++ `Module2Router` 接口声明了 `app` 模块暴露给 `module1`、`app` 的方法的定义。
+
+以 `AppRouter` 接口文件为例，这个接口的定义如下：
+
+```java
+public interface AppRouter {
+
+    /**
+     * 普通的同步方法调用
+     */
+    String syncMethodOfApp();
+
+    /**
+     * 以 RxJava 形式封装的异步方法
+     */
+    Observable<String> asyncMethod1OfApp();
+
+    /**
+     * 以 Callback 形式封装的异步方法
+     */
+    void asyncMethod2OfApp(Callback<String> callback);
+}
+```
+
+我们在 `AppRouter` 这个接口内定义了 1 个同步方法，2 个异步方法，这些方法是 `app` 模块需要暴露给 `module1` 、 `module2` 的方法，同时 `app` 模块自身也需要提供这个接口的实现，所以我需要在 `app` 、`module1` 、`module2` 这三个模块的 `build.gradle` 文件中依赖 `router` 这个模块：
+
+```groovy
+dependencies {
+    // Other dependencies
+    ...
+    implementation project(":router")
+}
+```
+
+然后我们回到 `app` 模块，为刚刚在 `router` 定义的 `AppRouter` 接口提供一个实现：
+
+```java
+@RouterProvider
+public class AppRouterImpl implements AppRouter {
+
+    @Override
+    public String syncMethodOfApp() {
+        return "syncMethodResult";
+    }
+
+    @Override
+    public Observable<String> asyncMethod1OfApp() {
+        return Observable.just("asyncMethod1Result");
+    }
+
+    @Override
+    public void asyncMethod2OfApp(final Callback<String> callback) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                callback.onResult("asyncMethod2Result");
+            }
+        }).start();
+    }
+}
+```
+
+我们可以发现，我们把 `app` 模块内的方法暴露给其它模块的方式和我们平时写代码并没有什么不同，就是声明一个接口提供给其它模块，同时在自己内部编写一个这个接口的实现类。无论是同步还是异步，无论是 Callback 的方式，还是 RxJava 的方式，都可以使用我们原有的开发方式。唯一的区别就是，我们在 `AppRouterImpl` 实现类上方标记了一个 `@RouterProvider` 注解，这个注解的作用是用来通知 `AppJoint` 框架在 `AppRouter` 和 `AppRouterImpl` 之间建立联系，这样其它模块就可以通过 `AppJoint` 找到一个 `AppRouter` 的实例并调用里面的方法了。
+
+假设现在 `module1` 中需要调用 `app` 模块中的 `asyncMethod1OfApp` 方法，由于 `app` 模块已经把这个方法声明在了 `router` 模块的 `AppRouter` 接口中了，`module1` 由于也依赖了 `router` 模块，所以 `module1` 内可以访问到 `AppRouter` 这个接口，但是却访问不到 `AppRouterImpl` 这个实现类，因为这个类定义在 `app` 模块内，这时候我们可以使用 **AppJoint** 来帮助 `module1` 获取 `AppRouter` 的实例：
+
+```java
+AppRouter appRouter = AppJoint.getRouter(AppRouter.class);
+
+// 获得同步调用的结果        
+String syncResult = appRouter.syncMethodOfApp();
+// 发起异步调用
+appRouter.asyncMethod1OfApp()
+        .subscribe((result) -> {
+            // handle asyncResult
+        });
+// 发起异步调用
+appRouter.asyncMethod2OfApp(new Callback<String>() {
+    @Override
+    public void onResult(String data) {
+        // handle asyncResult
+    }
+});
+```
+
+在上面的代码中，我们可以看到，除了第一步获取 `AppRouter` 接口的实例我们用到了 **AppJoint** 的 API `AppJoint.getRouter` 以外，剩下的代码，`module1` 调用 `app` 模块内的方法的方式，和我们原来的开发方式没有任何区别。
+
+也就是说，如果一个模块需要提供方法供其他模块调用，需要做以下步骤：
+
++ 把接口声明在 `router` 模块中
++ 在自己模块内部实现上一步中声明的接口，同时在实现类上标记 `@RouterProvider` 注解
+
+完成这两步以后就可以在其它模块中使用以下方式获取该模块声明的接口的实例，并调用里面的方法：
+
+```java
+AppRouter appRouter = AppJoint.getRouter(AppRouter.class);
+Module1Router module1Router = AppJoint.getRouter(Module1Router.class);
+Module2Router module2Router = AppJoint.getRouter(Module2Router.class);
+```
+
+这种方法不仅仅可以保证处于相同依赖层次的业务模块可以互相调用彼此的方法，还可以支持从业务模块中调用 `app` 模块内的方法。这样就可以 **保证我们组件化的过程可以是渐进的** ，我们不需要一口气把 `app` 模块中的所有功能全部拆分到各个业务模块中，我们可以逐渐地把功能拆分出来，以保证我们的业务迭代和组件化改造同时进行。当我们的 `AppRouter` 里面的方法越来越少直到最后可以把这个类从项目中安全删除的时候，我们的组件化改造就完成了。
+
+## 模块独立编译运行模式下跨模块方法的调用
+
+上面一个小结中我们已经介绍了使用 **AppJoint** 在 App 全量编译运行期间，业务模块之间跨模块方法调用的解决方案。在全量编译期间，我们可以通过 `AppJoint.getRouter` 这个方法找到指定模块提供的接口的实例，但是在模块单独编译运行期间，其它的模块是不参与编译的，它们的代码也不会打包进用于模块独立运行的 **standalaone 模块**，我们如何解决在模块单独编译运行模式下，跨模块调用的代码依然有效呢？
+
 
 
 我心目中理想的组件化方案应该是这样的：
@@ -312,12 +422,6 @@ projectRoot
 
 
 + **类型安全、易于重构：** 对于跨组件之间的调用，应当发挥静态类型语言的编译器检查的优势;
-
-### 单独运行模式下，调用其他模块
-
-## Application 对象的处理
-
-## 如何跨模块调用同步/异步方法
 
 ## 如何跨模块启动 Activity/Fragment
 
