@@ -17,7 +17,7 @@ Android 组件化的概念大概从两年前开始有人讨论，到目前为止
 
 我认为目前想要进行组件化的项目应该可以分为两类：
 
-+ 只包含有一个 **application** 模块，以及一些技术组件的 **library** 模块（业务无关）。
++ 包含有一个 **application** 模块，以及一些技术组件的 **library** 模块（业务无关）。
 + 除了 **application** 模块以外，已经存在若干包含业务的 **library** 模块和技术的 **library** 模块。
 
 无论是哪种类型的项目，面临的问题应该都是类似的，**那就是项目大起来以后，编译实在是太慢了**。
@@ -525,6 +525,7 @@ public interface Module1Router {
 然后在 `module1` 模块里 `Module1Router` 对应的实现类 `Module1RouterImpl` 中实现刚刚定义的方法：
 
 ```java
+@RouterProvider
 public class Module1RouterImpl implements Module1Router {
 
     ...
@@ -556,33 +557,68 @@ public interface Module1Router {
 }
 ```
 
-差不多的，我们只要在 `Module1RouterImpl` 里接着实现方法即可，这里不再赘述。
+差不多的写法，我们只要在 `Module1RouterImpl` 里接着实现方法即可:
 
-与 URL scheme 进行比较
+```java
+@RouterProvider
+public class Module1RouterImpl implements Module1Router {
+    @Override
+    public void startModule1Activity(Context context) {
+        Intent intent = new Intent(context, Module1Activity.class);
+        context.startActivity(intent);
+    }
 
-> Mock startActivity
+    @Override
+    public Fragment obtainModule1Fragment() {
+        Fragment fragment = new Module1Fragment();
+        Bundle bundle = new Bundle();
+        bundle.putString("param1", "value1");
+        bundle.putString("param2", "value2");
+        fragment.setArguments(bundle);
+        return fragment;
+    }
+}
+```
+
+前面提到过，目前社区大多数组件化方案都是使用 **自定义私有协议，利用 URL-Scheme 的方式来实现跨模块页面跳转** 的，即类似 **ARouter** 的那种方案，为什么 **AppJoint** 不采用这种方案呢？
+
+原因其实很简单，假设项目中没有组件化的需求，我们在同一个模块内进行 Activity 的跳转，肯定不会采用 **URL-Scheme** 方式进行跳转，我们肯定是自己创建 `Intent` 进行跳转的。其实说到底，使用 **URL-Scheme** 进行跳转是 **不得已而为之**，它只是手段，不是目的，因为在组件化之后，模块之间彼此的 Activity 变得不可见了，所以我们转而使用 **URL-Scheme** 的方式进行跳转。
+
+现在 **AppJoint** 重新支持了使用代码进行跳转，只需要把跳转的逻辑抽象为接口中的方法暴露给其它模块，其它模块就可以调用这个方法实现跳转逻辑。除此以外，使用接口提供跳转逻辑相比 **URL-Scheme** 方式还有什么优势呢？
+
+1. 类型安全。充分利用 Java 这种静态类型语言的编译器检查功能，通过接口暴露的跳转方法，无论是传参还是返回值，如果类型错误，在编译期间就能发现错误，而使用 **URL-Scheme** 进行跳转，如果发生类型上的错误，只能在运行期间才能发现错误。
+
+2. 效率高。即使是使用 **URL-Scheme** 进行跳转，底层仍然是构造 `Intent` 进行跳转，但是却额外引入了对跳转 URL 进行构造和解析的过程，涉及到额外的序列化和反序列化逻辑，降低了代码的执行效率。而使用接口提供的跳转逻辑，我们直接构造 `Intent` 进行跳转，不涉及到任何额外的序列化和反序列化操作，和我们日常的 Activity 跳转逻辑执行效率相同。
+
+3. IDE 友好。使用 **URL-Scheme** 进行跳转，IDE 无法提供任何智能提示，只能依靠完善的文档或者开发者自身检查来确保跳转逻辑的正确性，而通过接口提供跳转逻辑可以最大限度发挥 IDE 的智能提示功能，确保我们的跳转逻辑是正确的。
+
+4. 易于重构。使用 **URL-Scheme** 进行跳转，如果遇到跳转逻辑需要重构的情况，例如 Activity 名字的修改，参数名称的修改，参数数量的增删，只能依靠开发者对使用到跳转逻辑的地方一个一个修改，而且无法确保全部都修改正确了，因为编译器无法帮我们检查。而通过接口提供的跳转逻辑代码需要重构时，编译器可以自动帮助我们检查，一旦有地方没有改对，直接在编译期报错，而且 IDE 都提供了智能重构的功能，我们可以方便地对接口中定义的方法进行重构。
+
+5. 学习成本低。我们可以沿用我们熟悉的开发方式，不需要去学习  **URL-Scheme** 跳转框架的 API。这样还可以保证我们的跳转逻辑不与具体的框架强绑定，我们通过接口隔离了跳转逻辑的真正实现，即使使用 **AppJoint** 进行跳转，我们也可以在随时把跳转逻辑切换到其他方案，包括 **URL-Scheme** 方式。
+
+我个人的实践，目前项目中同一进程内的页面跳转已经全部由 **AppJoint** 的方式实现，目前只有跨进程的页面启动交给了 **URL-Scheme** 这种方式（例如从浏览器唤醒 App 某个页面）。
+
+最后再提一点，由于跨模块启动 Activity 沿用了跨模块方法调用的开发方式，在业务模块单独编译运行模式下，我们也需要 Mock 这些启动方法。既然我们是在独立调试某个业务模块，我们肯定不是真的希望跳转到那些页面，我们在 Mock 方法里直接输出 Log 或者 Toast 即可。
 
 
+## 现在就开始组件化
 
-我心目中理想的组件化方案应该是这样的：
+#### 带 Router 的结构图
 
-+ 轻量级，极少的学习成本
+Gradle Plugin
 
-跨模块的方法调用，很多组件化框架给出的解决方案是通过框架自身的总线或者是通过 **URL-Scheme** 的方式进行调用。这一点是我们觉得不够优雅的地方，原因以及解决方案将在后面详细介绍。
+APT
 
+implementation
 
-+ **类型安全、易于重构：** 对于跨组件之间的调用，应当发挥静态类型语言的编译器检查的优势;
+总代码行数
 
-## 总结
+Github 地址
 
-文章很长，感谢您耐心读完。由于本人能力有限，文章可能存在纰漏的地方，欢迎各位指正。关于如何对业务流程进行封装，因为我并没有看到过很多技术文章对这一块进行讨论，所以我个人的见解会有不全面的地方，如果您有更好的方案，欢迎一起讨论。谢谢大家！
+## 写在最后
 
-## 简单直接，而且够用
+通过本文的介绍，我们其实可以发现 **AppJoint** 是个思想很简单的组件化方案。虽然简单，但是却直接而且够用，尽管没有像其它的组件化方案那样提供了各种各样强大的 API，但是却足以胜任大多数中小型项目，这是我们一以贯之的设计理念。文章很长，感谢您耐心读完。由于本人能力有限，文章可能存在纰漏的地方，欢迎各位指正，谢谢大家！
+___
+如果您对我的技术分享感兴趣，欢迎关注我的个人公众号：麻瓜日记，不定期更新原创技术分享，谢谢！:)
 
-## 带 Router 的结构图
-
-## 关注我的公众号
-
-## Other tips
-
-使用 implementation
+![](http://prototypez.github.io/images/qrcode.jpg)
