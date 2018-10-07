@@ -45,9 +45,9 @@ Android 组件化的概念大概从两年前开始有人讨论，到目前为止
 本人接触最早的组件化方案是 [DDComponentForAndroid](https://github.com/luojilab/DDComponentForAndroid)，学习这个方案给了我很多启发，在这个方案中，作者提出，可以在 `gradle.properties` 中新增一个变量 `isRunAlone=true` ，用来控制某个业务模块是 **以 library 模块集成到 App 的全量编译中** 还是 **以 application 模块独立编译启动** 。不知道是不是很多人也受了相同的启发，后面很多的组件化框架都是使用类似的方案:
 
 ```groovy
-if(isRunAlone.toBoolean()){    
+if (isRunAlone.toBoolean()) {    
     apply plugin: 'com.android.application'
-}else{  
+} else {  
     apply plugin: 'com.android.library'
 }
 ```
