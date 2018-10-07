@@ -373,7 +373,7 @@ public class AppRouterImpl implements AppRouter {
 假设现在 `module1` 中需要调用 `app` 模块中的 `asyncMethod1OfApp` 方法，由于 `app` 模块已经把这个方法声明在了 `router` 模块的 `AppRouter` 接口中了，`module1` 由于也依赖了 `router` 模块，所以 `module1` 内可以访问到 `AppRouter` 这个接口，但是却访问不到 `AppRouterImpl` 这个实现类，因为这个类定义在 `app` 模块内，这时候我们可以使用 **AppJoint** 来帮助 `module1` 获取 `AppRouter` 的实例：
 
 ```java
-AppRouter appRouter = AppJoint.getRouter(AppRouter.class);
+AppRouter appRouter = AppJoint.service(AppRouter.class);
 
 // 获得同步调用的结果        
 String syncResult = appRouter.syncMethodOfApp();
@@ -391,7 +391,7 @@ appRouter.asyncMethod2OfApp(new Callback<String>() {
 });
 ```
 
-在上面的代码中，我们可以看到，除了第一步获取 `AppRouter` 接口的实例我们用到了 **AppJoint** 的 API `AppJoint.getRouter` 以外，剩下的代码，`module1` 调用 `app` 模块内的方法的方式，和我们原来的开发方式没有任何区别。`AppJoint.getRouter` 就是 **AppJoint** 所有 API 里唯一的那个方法。
+在上面的代码中，我们可以看到，除了第一步获取 `AppRouter` 接口的实例我们用到了 **AppJoint** 的 API `AppJoint.service` 以外，剩下的代码，`module1` 调用 `app` 模块内的方法的方式，和我们原来的开发方式没有任何区别。`AppJoint.service` 就是 **AppJoint** 所有 API 里唯一的那个方法。
 
 也就是说，如果一个模块需要提供方法供其他模块调用，需要做以下步骤：
 
@@ -401,25 +401,25 @@ appRouter.asyncMethod2OfApp(new Callback<String>() {
 完成这两步以后就可以在其它模块中使用以下方式获取该模块声明的接口的实例，并调用里面的方法：
 
 ```java
-AppRouter appRouter = AppJoint.getRouter(AppRouter.class);
-Module1Router module1Router = AppJoint.getRouter(Module1Router.class);
-Module2Router module2Router = AppJoint.getRouter(Module2Router.class);
+AppRouter appRouter = AppJoint.service(AppRouter.class);
+Module1Router module1Router = AppJoint.service(Module1Router.class);
+Module2Router module2Router = AppJoint.service(Module2Router.class);
 ```
 
 这种方法不仅仅可以保证处于相同依赖层次的业务模块可以互相调用彼此的方法，还可以支持从业务模块中调用 `app` 模块内的方法。这样就可以 **保证我们组件化的过程可以是渐进的** ，我们不需要一口气把 `app` 模块中的所有功能全部拆分到各个业务模块中，我们可以逐渐地把功能拆分出来，以保证我们的业务迭代和组件化改造同时进行。当我们的 `AppRouter` 里面的方法越来越少直到最后可以把这个类从项目中安全删除的时候，我们的组件化改造就完成了。
 
 ## 模块独立编译运行模式下跨模块方法的调用
 
-上面一个小结中我们已经介绍了使用 **AppJoint** 在 App 全量编译运行期间，业务模块之间跨模块方法调用的解决方案。在全量编译期间，我们可以通过 `AppJoint.getRouter` 这个方法找到指定模块提供的接口的实例，但是在模块单独编译运行期间，其它的模块是不参与编译的，它们的代码也不会打包进用于模块独立运行的 **standalaone 模块**，我们如何解决在模块单独编译运行模式下，跨模块调用的代码依然有效呢？
+上面一个小结中我们已经介绍了使用 **AppJoint** 在 App 全量编译运行期间，业务模块之间跨模块方法调用的解决方案。在全量编译期间，我们可以通过 `AppJoint.service` 这个方法找到指定模块提供的接口的实例，但是在模块单独编译运行期间，其它的模块是不参与编译的，它们的代码也不会打包进用于模块独立运行的 **standalaone 模块**，我们如何解决在模块单独编译运行模式下，跨模块调用的代码依然有效呢？
 
 以 `module1` 为例，首先为了便于在 `module1` 内部任何地方都可以调用其它模块的方法，我们创建一个 `RouterServices` 类用于存放其它模块的接口的实例：
 
 ```java
 public class RouterServices {
     // app 模块对外暴露的接口
-    public static AppRouter sAppRouter = AppJoint.getRouter(AppRouter.class);
+    public static AppRouter sAppRouter = AppJoint.service(AppRouter.class);
     // module2 模块对外暴露的接口
-    public static Module2Router sModule2Router = AppJoint.getRouter(Module2Router.class);
+    public static Module2Router sModule2Router = AppJoint.service(Module2Router.class);
 }
 ```
 
@@ -596,7 +596,7 @@ public class Module1RouterImpl implements Module1Router {
 
 ## 现在就开始组件化
 
-[AppJoint](https://github.com/PrototypeZ/AppJoint) 的 Github 地址为：[https://github.com/PrototypeZ/AppJoint](https://github.com/PrototypeZ/AppJoint) 。核心代码不超过 500 行，您完全可以快速掌握这个工具加速您的组件化开发，只要 Fork 一份代码即可。如果您不想自己引入工程，我们也提供了一个开箱即用的版本，您可以直接通过 **Gradle** 引入。
+到这里为止，使用 **AppJoint** 进行组件化的介绍就已经结束了。[AppJoint](https://github.com/PrototypeZ/AppJoint) 的 Github 地址为：[https://github.com/PrototypeZ/AppJoint](https://github.com/PrototypeZ/AppJoint) 。核心代码不超过 500 行，您完全可以快速掌握这个工具加速您的组件化开发，只要 Fork 一份代码即可。如果您不想自己引入工程，我们也提供了一个开箱即用的版本，您可以直接通过 **Gradle** 引入。
 
 1. 在项目根目录的 `build.gradle` 文件中添加 **AppJoint插件** 依赖：
 
@@ -630,7 +630,7 @@ apply plugin: 'app-joint'
 
 通过本文的介绍，我们其实可以发现 **AppJoint** 是个思想很简单的组件化方案。虽然简单，但是却直接而且够用，尽管没有像其它的组件化方案那样提供了各种各样强大的 API，但是却足以胜任大多数中小型项目，这是我们一以贯之的设计理念。
 
-如果您感觉这个项目对您有帮助，希望可以点一个 Star ，谢谢 : )文章很长，感谢您耐心读完。由于本人能力有限，文章可能存在纰漏的地方，欢迎各位指正，再次谢谢大家！
+如果您感觉这个项目对您有帮助，希望可以点一个 Star ，谢谢 : ) 。文章很长，感谢您耐心读完。由于本人能力有限，文章可能存在纰漏的地方，欢迎各位指正，再次谢谢大家！
 ___
 如果您对我的技术分享感兴趣，欢迎关注我的个人公众号：麻瓜日记，不定期更新原创技术分享，谢谢！:)
 
