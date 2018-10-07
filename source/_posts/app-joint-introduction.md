@@ -38,7 +38,7 @@ Android 组件化的概念大概从两年前开始有人讨论，到目前为止
 
 ![](https://raw.githubusercontent.com/PrototypeZ/AppJoint/master/app-joint-logo.png)
 
-**AppJoint** 是一个非常简单有效的方案，引入 **AppJoint** 进行组件化所有的 API 只包含 **3** 个注解，加 **1** 个方法，这可能是目前最简单的组件化方案了，我们的框架不追求功能要多么复杂强大，只专注于框架本身实用、简单与高效。
+**AppJoint** 是一个非常简单有效的方案，引入 **AppJoint** 进行组件化所有的 API 只包含 **3** 个注解，加 **1** 个方法，这可能是目前最简单的组件化方案了，我们的框架不追求功能要多么复杂强大，只专注于框架本身实用、简单与高效。而且整体实现也非常简单，核心源码 **不到500行**。
 
 ## 模块独立运行遇到的问题
 
@@ -148,7 +148,7 @@ dependencies {
 我们在上一步中，为每个业务模块建立了独立运行的 **standalone 模块** ，但是此时还并不能把业务模块独立启动起来，因为模块的初始化工作并没有完成。我们在前面介绍 **AppJoint** 的设计思想的时候，曾经说过我们希望组件化方案最好 『**不要有太多的学习成本，沿用目前已有的开发方式**』，所以这里我们的解决方案是，在每个业务模块里新建一个自定义的 `Application` 类，用来实现该业务模块的初始化逻辑，这里以在 `module1` 中新建自定义 `Application` 为例：
 
 ```java
-@ModuleSpec("module1")
+@ModuleSpec
 public class Module1Application extends Application {
 
     @Override
@@ -207,33 +207,28 @@ public class Module1StandaloneApplication extends Module1Application {
 写到这里，我们其实还有一个问题没有解决。`Module1Application` 目前除了被 `Module1StandaloneApplication` 继承以外，没有被任何其它地方引用到。您可能会有疑问：那我们如何保证 App 全量编译运行时，`Module1Application` 里的初始化逻辑会被调用到呢？细心的您可能早就已经发现了：我们在上面定义 `Module1Application` 时，同时标记了一个注解 `@ModuleSpec`:
 
 ```java
-@ModuleSpec("module1")
+@ModuleSpec
 public class Module1Application extends Application {
     ...
 }
 ```
 
-这个注解的作用是告知 **AppJoint** 框架，我们需要确保当前模块该 `Application` 中的初始化行为，能够在最终全量编译时，被主 App 的 `Application` 类调用到。所以对应的，我们的主 App 模块（`app` 模块）的自定义 `Application` 类也需要被一个注解 -- `ModulesSpec` 标记，代码如下所示：
+这个注解的作用是告知 **AppJoint** 框架，我们需要确保当前模块该 `Application` 中的初始化行为，能够在最终全量编译时，被主 App 的 `Application` 类调用到。所以对应的，我们的主 App 模块（`app` 模块）的自定义 `Application` 类也需要被一个注解 -- `AppSpec` 标记，代码如下所示：
 
 ```java
-@ModulesSpec({"module1", "module2"})
+@AppSpec
 public class App extends Application {
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        
-    }
+    ...
 }
 ```
 
-上面代码中的 `App` 为主 App 对应的自定义 `Application` 类，我们给这个类上方标记了 `@ModulesSpec` 注解，告诉 `App` 在项目中包含两个子模块 `module1`, `module2`，需要在执行 `App` 自身初始化的同时一并执行这些子模块的 `Application` 里对应声明周期的初始化。即：
+上面代码中的 `App` 为主 App 对应的自定义 `Application` 类，我们给这个类上方标记了 `@AppSpec` 注解，这样系统在执行 `App` 自身初始化的同时会一并执行这些子模块的 `Application` 里对应声明周期的初始化。即：
  
 + `App` 执行 `onCreate` 方法时，保证也同时执行 `Module1Application` 和 `Module2Application` 的 `onCreate` 方法 。
 + `App` 执行 `attachBaseContext` 方法时，保证也同时执行 `Module1Application` 和 `Module2Application` 的 `attachBaseContext` 方法。 
 + 依次类推，当 `App` 执行某个生命周期方法时，保证子模块的 `Application` 的对应的生命周期方法也会被执行。
 
-这样，我们通过 **AppJoint** 的 `@ModuleSpec` 和 `@ModulesSpec` 两个注解，在主 App 的 `Application` 和子模块的 `Application` 之间建立了联系，保证了在全量编译运行时，所有业务模块的初始化行为都能被保证执行。
+这样，我们通过 **AppJoint** 的 `@ModuleSpec` 和 `@AppSpec` 两个注解，在主 App 的 `Application` 和子模块的 `Application` 之间建立了联系，保证了在全量编译运行时，所有业务模块的初始化行为都能被保证执行。
 
 到这里为止，我们已经处理好了业务模块在 **独立编译运行模式** 和 **全量编译运行模式** 这两种情况下的初始化问题，目前关于 `Application` 还有一个潜在问题，我们的项目在组件化之前，我们经常会在 `Applictaion` 类的 `onCreate` 周期保存当前 `Appliction` 的引用，然后在应用的任何地方都可以使用这个 `Application` 对象，例如下面这样：
 
@@ -250,10 +245,12 @@ public class App extends Application {
 }
 ```
 
-这么处理之后，我们可以在项目任意位置通过 `App.INSTANCE` 使用 **Application Context** 对象。但是，现在组件化改造以后，以 `module1` 为例，在独立运行模式时，应用的 `Application` 对象是 `Module1StandaloneApplication` 的实例，而在全量编译运行模式时，应用的 `Application` 对象是主 App 模块的 `App` 的实例，我们如何能像之前一样，做到在项目中任何一个地方都能获取到当前使用的 `Application` 实例呢？我们对 `Module1Application` 做以下改造：
+这么处理之后，我们可以在项目任意位置通过 `App.INSTANCE` 使用 **Application Context** 对象。但是，现在组件化改造以后，以 `module1` 为例，在独立运行模式时，应用的 `Application` 对象是 `Module1StandaloneApplication` 的实例，而在全量编译运行模式时，应用的 `Application` 对象是主 App 模块的 `App` 的实例，我们如何能像之前一样，做到在项目中任何一个地方都能获取到当前使用的 `Application` 实例呢？
+
+我们可以把项目中所有自定义 `Application` 内部保存的自身的 `Application` 实例的类型，从具体的自定义类，改为标准的 `Application` 类型，以 `Module1Application` 为例：
 
 ```java
-@ModuleSpec("module1")
+@ModuleSpec
 public class Module1Application extends Application {
     
     public static Application INSTANCE;
@@ -261,21 +258,18 @@ public class Module1Application extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        INSTANCE = (Application)getApplicationContext()
         // do module1 initialization
         Log.i("module1", "module1 init is called");
-    }
-
-    @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(base);
-        INSTANCE = (Application) base.getApplicationContext();
     }
 }
 ```
 
-我们把对 `INSTANCE` 变量的赋值移动到了 `attachBaseContext` 这个回调里，那么首先在 `module1` 单独编译运行模式下，`INSTANCE` 肯定是被赋了正确的值没错的；即使在全量编译运行模式下，由于 **AppJoint** 框架 **保证了当主 App 的 `App` 对象被调用 `attachBaseContext` 回调时，所有组件化业务模块的 `Application` 也会被调用 `attachBaseContext` 这个回调**，所以此时 `Module1Application` 在 `attachBaseContext` 里获得到的 `Application` 对象也是当前正确的值。这样，我们在 `module1` 这个模块里的任何位置使用 `Module1Application.INSTANCE` 总能正确地获得 `Application` 的实例。对应的，我们使用相同的方法在 `module2` 这个模块里，也可以在任何位置使用 `Module2Application.INSTANCE` 正确地获得 `Application` 的实例，而不需要知道当前处于独立编译运行状态还是全量编译运行状态。
+我们可以看到，如果按原来的写法， `INSTANCE` 的类型一般是具体的自定义类型 `Module1Application`，现在我们改成了 `Application`。同时 `onCreate` 方法里为 `INSTANCE` 赋值的语句不再是 `INSTANCE = this`，而是 `INSTANCE = (Application)getApplicationContext()`。这样处理以后，就可以保证 `module1` 里面的代码，无论是在 App 全量编译模式下，还是独立编译调试模式下，都可以通过 `Module1Application.INSTANCE` 访问当前的 `Application` 实例。这是由于 **AppJoint** 框架 **保证了当主 App 的 `App` 对象被调用 `attachBaseContext` 回调时，所有组件化业务模块的 `Application` 也会被调用 `attachBaseContext` 这个回调**。
 
-> 由于 `attachBaseContext` 比 `onCreate` 更先回调，所以 `onCreate` 里的原有逻辑不需要改动，但是有一点需要留意，所有需要使用 **Application Context** 的地方，**一定要** 使用在 `attachBaseContext` 里获得到的实例（例如 `Module1Application.INSTANCE` ），**一定不要** 和该业务模块自身定义的 `Application` 类有任何耦合（例如 `Module1Application`），因为在运行时真正使用的 `Application` 实例可能不是它。
+这样，我们在 `module1` 这个模块里的任何位置使用 `Module1Application.INSTANCE` 总能正确地获得 `Application` 的实例。对应的，我们使用相同的方法在 `module2` 这个模块里，也可以在任何位置使用 `Module2Application.INSTANCE` 正确地获得 `Application` 的实例，而不需要知道当前处于独立编译运行状态还是全量编译运行状态。
+
+> **一定不要** 依赖某个业务模块自身定义的 `Application` 类的实例（例如 `Module1Application` 的实例），因为在运行时真正使用的 `Application` 实例可能不是它。
 
 我们已经解决业务模块在 **单独编译运行模式** 下和在 **App 全量编译模式** 下，初始化逻辑应该如何组织的问题。我们沿用了我们熟悉的自定义 `Application` 方案，来承载各个模块的初始化行为，同时利用 **AppJoint** 这个胶水，把每个模块的初始化逻辑集成到最终全量编译的 App 中。而这一切和 **AppJoint** 有关的 API 仅仅是两个注解，这里很好的说明了 **AppJoint** 是个学习成本低的工具，我们可以沿用我们已有的开发方式而不是改造我们原有的代码逻辑导致项目和组件化框架造成过度耦合。
 
@@ -285,7 +279,7 @@ public class Module1Application extends Application {
 
 ![](/images/app-joint-structure-1.png)
 
-上图中是我们比较理想情况下的组件化的最终状态，`App` 模块不承载任何业务逻辑，它的作用仅仅是作为一个 `application` 壳把 `Module1` ~ `Module(n)` 这个 n 个模块的功能都集成在一起成为一个完整的 App。`Module1` ~ `Module(n)` 这 n 个模块互相之间不存在任何交叉依赖，它们各自仅包含各自的业务逻辑。这种方式虽然完成了业务模块之间的解耦，但是给我们带来的新的挑战：业务模块之间互相调用彼此的功能是非常常见且合理的需求，但是由于这些模块在依赖层次上位于同一层次，所以显然是无法直接调用的。
+上图是我们比较理想情况下的组件化的最终状态，`App` 模块不承载任何业务逻辑，它的作用仅仅是作为一个 `application` 壳把 `Module1` ~ `Module(n)` 这个 n 个模块的功能都集成在一起成为一个完整的 App。`Module1` ~ `Module(n)` 这 n 个模块互相之间不存在任何交叉依赖，它们各自仅包含各自的业务逻辑。这种方式虽然完成了业务模块之间的解耦，但是给我们带来的新的挑战：业务模块之间互相调用彼此的功能是非常常见且合理的需求，但是由于这些模块在依赖层次上位于同一层次，所以显然是无法直接调用的。
 
 此外，上图的这种形态是组件化的最终的理想状态，如果我们要将项目改造以达到这种状态，毫无疑问需要付出巨大的时间成本。在业务快速迭代期间，这是我们无法承担的成本，我们只能逐渐地改造项目，也就是说，`App` 模块内的业务代码是被逐渐拆解出来形成新的独立模块的，这意味着在组件化过程的相当长一段时间内，`App` 内还是存在业务代码的，而被拆解出来的模块内的业务逻辑代码，是有可能调用到 `App` 模块内的代码的。这是一种很尴尬的状态，在依赖层次中，位于依赖层次较低位置的代码反而要去调用依赖层次较高位置的代码。
 
@@ -334,7 +328,7 @@ public interface AppRouter {
 }
 ```
 
-我们在 `AppRouter` 这个接口内定义了 1 个同步方法，2 个异步方法，这些方法是 `app` 模块需要暴露给 `module1` 、 `module2` 的方法，同时 `app` 模块自身也需要提供这个接口的实现，所以我需要在 `app` 、`module1` 、`module2` 这三个模块的 `build.gradle` 文件中依赖 `router` 这个模块：
+我们在 `AppRouter` 这个接口内定义了 1 个同步方法，2 个异步方法，这些方法是 `app` 模块需要暴露给 `module1` 、 `module2` 的方法，同时 `app` 模块自身也需要提供这个接口的实现，所以首先我们需要在 `app` 、`module1` 、`module2` 这三个模块的 `build.gradle` 文件中依赖 `router` 这个模块：
 
 ```groovy
 dependencies {
@@ -349,7 +343,7 @@ dependencies {
 然后我们回到 `app` 模块，为刚刚在 `router` 定义的 `AppRouter` 接口提供一个实现：
 
 ```java
-@RouterProvider
+@ServiceProvider
 public class AppRouterImpl implements AppRouter {
 
     @Override
@@ -374,7 +368,7 @@ public class AppRouterImpl implements AppRouter {
 }
 ```
 
-我们可以发现，我们把 `app` 模块内的方法暴露给其它模块的方式和我们平时写代码并没有什么不同，就是声明一个接口提供给其它模块，同时在自己内部编写一个这个接口的实现类。无论是同步还是异步，无论是 Callback 的方式，还是 RxJava 的方式，都可以使用我们原有的开发方式。唯一的区别就是，我们在 `AppRouterImpl` 实现类上方标记了一个 `@RouterProvider` 注解，这个注解的作用是用来通知 `AppJoint` 框架在 `AppRouter` 和 `AppRouterImpl` 之间建立联系，这样其它模块就可以通过 `AppJoint` 找到一个 `AppRouter` 的实例并调用里面的方法了。
+我们可以发现，我们把 `app` 模块内的方法暴露给其它模块的方式和我们平时写代码并没有什么不同，就是声明一个接口提供给其它模块，同时在自己内部编写一个这个接口的实现类。无论是同步还是异步，无论是 Callback 的方式，还是 RxJava 的方式，都可以使用我们原有的开发方式。唯一的区别就是，我们在 `AppRouterImpl` 实现类上方标记了一个 `@ServiceProvider` 注解，这个注解的作用是用来通知 `AppJoint` 框架在 `AppRouter` 和 `AppRouterImpl` 之间建立联系，这样其它模块就可以通过 `AppJoint` 找到一个 `AppRouter` 的实例并调用里面的方法了。
 
 假设现在 `module1` 中需要调用 `app` 模块中的 `asyncMethod1OfApp` 方法，由于 `app` 模块已经把这个方法声明在了 `router` 模块的 `AppRouter` 接口中了，`module1` 由于也依赖了 `router` 模块，所以 `module1` 内可以访问到 `AppRouter` 这个接口，但是却访问不到 `AppRouterImpl` 这个实现类，因为这个类定义在 `app` 模块内，这时候我们可以使用 **AppJoint** 来帮助 `module1` 获取 `AppRouter` 的实例：
 
@@ -402,7 +396,7 @@ appRouter.asyncMethod2OfApp(new Callback<String>() {
 也就是说，如果一个模块需要提供方法供其他模块调用，需要做以下步骤：
 
 + 把接口声明在 `router` 模块中
-+ 在自己模块内部实现上一步中声明的接口，同时在实现类上标记 `@RouterProvider` 注解
++ 在自己模块内部实现上一步中声明的接口，同时在实现类上标记 `@ServiceProvider` 注解
 
 完成这两步以后就可以在其它模块中使用以下方式获取该模块声明的接口的实例，并调用里面的方法：
 
@@ -429,7 +423,7 @@ public class RouterServices {
 }
 ```
 
-有了这个类以后，我们在 `module1` 内部如果需要调用其它模块的功能，我们只需要使用 `RouterServices.sAppRouter` 和 `RouterServices.sModule2Router` 这两个对象就可以了。但是如果是刚刚提到的 `module1` 独立编译运行的情况，即启动的 `application` 模块是 `module1Standalone`， 那么 `RouterServices.sAppRouter` 和 `RouterServices.sModule2Router` 这两个对象的值均为 `null` ，这种情况下因为 `app` 和 `module2` 这两个模块是没有被编译进来的。
+有了这个类以后，我们在 `module1` 内部如果需要调用其它模块的功能，我们只需要使用 `RouterServices.sAppRouter` 和 `RouterServices.sModule2Router` 这两个对象就可以了。但是如果是刚刚提到的 `module1` 独立编译运行的情况，即启动的 `application` 模块是 `module1Standalone`， 那么 `RouterServices.sAppRouter` 和 `RouterServices.sModule2Router` 这两个对象的值均为 `null` ，这是因为 `app` 和 `module2` 这两个模块此时是没有被编译进来的。
 
 如果我们需要在这种情况下保证已有的 `module1` 内部的通过 `RouterServices.sAppRouter` 和 `RouterServices.sModule2Router` 进行跨模块方法调用的代码依然能工作，我们就需要对这两个引用手动赋值，即我们需要创建 Mock 了 `AppRouter` 和 `Module2Router` 功能的类。这些类由于只对 `module1` 的独立编译运行有意义，所以这些类最合适的位置是放在 `module1Standalone` 这个模块内，以 `AppRouter` 的 Mock 类 `AppRouterMock` 为例：
 
@@ -525,7 +519,7 @@ public interface Module1Router {
 然后在 `module1` 模块里 `Module1Router` 对应的实现类 `Module1RouterImpl` 中实现刚刚定义的方法：
 
 ```java
-@RouterProvider
+@ServiceProvider
 public class Module1RouterImpl implements Module1Router {
 
     ...
@@ -560,7 +554,7 @@ public interface Module1Router {
 差不多的写法，我们只要在 `Module1RouterImpl` 里接着实现方法即可:
 
 ```java
-@RouterProvider
+@ServiceProvider
 public class Module1RouterImpl implements Module1Router {
     @Override
     public void startModule1Activity(Context context) {
@@ -600,24 +594,43 @@ public class Module1RouterImpl implements Module1Router {
 
 最后再提一点，由于跨模块启动 Activity 沿用了跨模块方法调用的开发方式，在业务模块单独编译运行模式下，我们也需要 Mock 这些启动方法。既然我们是在独立调试某个业务模块，我们肯定不是真的希望跳转到那些页面，我们在 Mock 方法里直接输出 Log 或者 Toast 即可。
 
-
 ## 现在就开始组件化
 
-#### 带 Router 的结构图
+[AppJoint](https://github.com/PrototypeZ/AppJoint) 的 Github 地址为：[https://github.com/PrototypeZ/AppJoint](https://github.com/PrototypeZ/AppJoint) 。核心代码不超过 500 行，您完全可以快速掌握这个工具加速您的组件化开发，只要 Fork 一份代码即可。如果您不想自己引入工程，我们也提供了一个开箱即用的版本，您可以直接通过 **Gradle** 引入。
 
-Gradle Plugin
+1. 在项目根目录的 `build.gradle` 文件中添加 **AppJoint插件** 依赖：
 
-APT
+```groovy
+buildscript {
+    ...
+    dependencies {
+        ...
+        classpath 'io.github.prototypez:app-joint:{latest_version}'
+    }
+}
+```
 
-implementation
+2. 在主 App 模块和每个组件化的模块添加 **AppJoint** 依赖：
 
-总代码行数
+```groovy
+dependencies {
+    ...
+    implementation "io.github.prototypez:app-joint-core:{latest_version}"
+}
+```
 
-Github 地址
+3. 在主 App 模块应用 **AppJoint插件**： 
+
+```groovy
+apply plugin: 'com.android.application'
+apply plugin: 'app-joint'
+```
 
 ## 写在最后
 
-通过本文的介绍，我们其实可以发现 **AppJoint** 是个思想很简单的组件化方案。虽然简单，但是却直接而且够用，尽管没有像其它的组件化方案那样提供了各种各样强大的 API，但是却足以胜任大多数中小型项目，这是我们一以贯之的设计理念。文章很长，感谢您耐心读完。由于本人能力有限，文章可能存在纰漏的地方，欢迎各位指正，谢谢大家！
+通过本文的介绍，我们其实可以发现 **AppJoint** 是个思想很简单的组件化方案。虽然简单，但是却直接而且够用，尽管没有像其它的组件化方案那样提供了各种各样强大的 API，但是却足以胜任大多数中小型项目，这是我们一以贯之的设计理念。
+
+如果您感觉这个项目对您有帮助，希望可以点一个 Star ，谢谢 : )文章很长，感谢您耐心读完。由于本人能力有限，文章可能存在纰漏的地方，欢迎各位指正，再次谢谢大家！
 ___
 如果您对我的技术分享感兴趣，欢迎关注我的个人公众号：麻瓜日记，不定期更新原创技术分享，谢谢！:)
 
