@@ -122,7 +122,7 @@ That's all, the `@ServiceProvider` annotation and the `AppJoint.service` method 
 
 It's easy to include AppJoint.
 
-1. First, add the **AppJoint** plugin dependency to `build.gradle` file of project root:
+1. Add the **AppJoint** plugin dependency to `build.gradle` file in project root:
 
 ```groovy
 buildscript {
@@ -134,7 +134,7 @@ buildscript {
 }
 ```
 
-2. Second, add the **AppJoint** dependency to every module：
+2. Add the **AppJoint** dependency to every module：
 
 ```groovy
 dependencies {
@@ -143,7 +143,7 @@ dependencies {
 }
 ```
 
-3. Third, apply the **AppJoint** plugin to your main app module： 
+3. Apply the **AppJoint** plugin to your main app module： 
 
 ```groovy
 apply plugin: 'com.android.application'
@@ -151,5 +151,7 @@ apply plugin: 'app-joint'
 ```
 
 ## Conclusion
+
+Github of AppJoint: [https://github.com/PrototypeZ/AppJoint](https://github.com/PrototypeZ/AppJoint)
 
 Have fun!
