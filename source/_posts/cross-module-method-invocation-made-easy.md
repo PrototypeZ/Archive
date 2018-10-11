@@ -22,9 +22,11 @@ projectRoot
   +--module2 
 ```
 
-Here, `app` is an application module and `module1`/`module2` are library modules. If we wish the `app` module to provide services to other modules like `module1` and `module2`, we need to create a new library first to define service interfaces inside it and make all modules have the dependency of this new module.
+Here, `app` is an application module and `module1`/`module2` are library modules. `app` module depends on `module1` and `module2`:
 
-For example, I create a new library module named `service` and create several kotlin interfaces which representing the services that each module want to provide to other modules:
+If we wish the `app` module to provide services to other modules like `module1` and `module2`, we need to create a new library first to define service interfaces inside it and make all modules have the dependency of this new module.
+
+For example, I create a new library module named `service` and create several kotlin interfaces which representing the services that each module wants to provide for other modules to use:
 
 ```
 projectRoot
@@ -54,7 +56,7 @@ dependencies {
 }
 ```
 
-Maybe our `AppService.kt` source codes is like below:
+Maybe our `AppService.kt` source codes are like below:
 
 ```kotlin
 interface AppService {
@@ -76,7 +78,7 @@ interface AppService {
 }
 ```
 
-And then we write an implementation of `AppService` in `app` module:
+And then we write an implementation of `AppService` in the `app` module:
 
 ```kotlin
 @ServiceProvider
@@ -105,7 +107,7 @@ class AppServiceImpl : AppService {
 
 Note that we add a `@ServiceProvider` annotation on the `AppServiceImpl` class.
 
-Now, if we need to call methods of `AppService` inside `module1`, we just need to write codes as below:
+Now, if we need to call methods of `AppService` inside `module1` or `module2`, we just need to write codes as below:
 
 ```kotlin
 val appService = AppJoint.service(AppService::class.java)
@@ -118,8 +120,36 @@ That's all, the `@ServiceProvider` annotation and the `AppJoint.service` method 
 
 ## Getting started
 
+It's easy to include AppJoint.
+
+1. First, add the **AppJoint** plugin dependency to `build.gradle` file of project root:
+
+```groovy
+buildscript {
+    ...
+    dependencies {
+        ...
+        classpath 'io.github.prototypez:app-joint:{latest_version}'
+    }
+}
+```
+
+2. Second, add the **AppJoint** dependency to every module：
+
+```groovy
+dependencies {
+    ...
+    implementation "io.github.prototypez:app-joint-core:{latest_version}"
+}
+```
+
+3. Third, apply the **AppJoint** plugin to your main app module： 
+
+```groovy
+apply plugin: 'com.android.application'
+apply plugin: 'app-joint'
+```
 
 ## Conclusion
-
 
 Have fun!
