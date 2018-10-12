@@ -5,7 +5,7 @@ date: 2018-10-10 20:57:00
 desc: multi module Android development
 ---
 
-Are you building an Android App with multiple modules? If so, I guess you maybe facing the same problem as me, that is: **Cross Module Method Invocation**. It's easy to call methods from library modules in our application module. But it's annoying to invoke methods from the application module in our libray modules. 
+Are you building an Android App with multiple modules? If so, I guess you maybe facing the same problem as me, that is: **Cross Module Method Invocation**. It's easy to call methods from library modules in our application module. But it's annoying to invoke methods from the application module in our library modules. 
 
 <!-- More -->
 
