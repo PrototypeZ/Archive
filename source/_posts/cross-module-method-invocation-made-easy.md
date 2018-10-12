@@ -5,7 +5,7 @@ date: 2018-10-10 20:57:00
 desc: multi module Android development
 ---
 
-Are you building an Android App with multiple modules? If so, I guess you maybe facing the same problem as me, that is: **Cross Module Method Invocation**. It's easy to call methods from library modules in application module. But it's annoying if we wish to call methods from application module in our libray modules. 
+Are you building an Android App with multiple modules? If so, I guess you maybe facing the same problem as me, that is: **Cross Module Method Invocation**. It's easy to call methods from library modules in our application module. But it's annoying to invoke methods from the application module in our libray modules. 
 
 <!-- More -->
 
@@ -24,7 +24,7 @@ projectRoot
 
 Here, `app` is an application module and `module1`/`module2` are library modules. `app` module depends on `module1` and `module2`:
 
-If we wish the `app` module to provide services to other modules like `module1` and `module2`, we need to create a new library first to define service interfaces inside it and make all modules have the dependency of this new module.
+If we wish the `app` module to provide services to other modules like `module1` and `module2`, we need to create a new library first and define service interfaces inside it and make all modules have the dependency of this new module.
 
 For example, I create a new library module named `service` and create several kotlin interfaces which representing the services that each module wants to provide for other modules to use:
 
@@ -52,7 +52,7 @@ All modules should include the `service` module excluding the `service` module i
 ```groovy
 dependencies {
     ...
-    api project(":service")
+    implementation project(":service")
 }
 ```
 
@@ -71,10 +71,10 @@ interface AppService {
   fun callMethodSyncOfApp(): String
 
   // call asynchronous method from app module
-  fun callMethodAsyncOfApp(callback: Module1Callback<AppEntity>)
+  fun callMethodAsyncOfApp(callback: AppCallback<AppEntity>)
 
   // get RxJava Observable from app module
-  fun observableOfModule1(): Observable<Module1Entity>
+  fun observableOfApp(): Observable<AppEntity>
 }
 ```
 
@@ -122,7 +122,7 @@ That's all, the `@ServiceProvider` annotation and the `AppJoint.service` method 
 
 It's easy to include AppJoint.
 
-1. Add the **AppJoint** plugin dependency to `build.gradle` file in project root:
+1. Add the **AppJoint** plugin dependency to the `build.gradle` file in project root:
 
 ```groovy
 buildscript {
