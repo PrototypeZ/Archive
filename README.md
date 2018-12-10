@@ -4,4 +4,5 @@
 4. cd themes/apollo
 5. git fetch origin
 6. git checkout custom
-7. hexo server
+7. npm install hexo-cli -g
+8. hexo server
